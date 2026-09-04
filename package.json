@@ -11,6 +11,7 @@
   },
   "scripts": {
     "dev": "concurrently \"pnpm run dev:server\" \"pnpm run dev:client\"",
+    "free-ports": "tsx scripts/freePorts.ts",
     "dev:server": "tsx watch server/index.ts",
     "dev:client": "vite",
     "build": "prisma generate && vite build && tsc --noEmit",

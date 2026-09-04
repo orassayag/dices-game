@@ -68,3 +68,50 @@ pnpm run lint          # Lint all files
 pnpm run build          # Build for production
 pnpm run start           # Run the production build
 ```
+
+## Troubleshooting
+
+### `port is already allocated` / `address already in use` on port 3000
+
+```
+Error response from daemon: ports are not available: exposing port TCP 0.0.0.0:3000 -> 127.0.0.1:0: listen tcp 0.0.0.0:3000: bind: address already in use
+```
+
+Something else on your machine is already using port 3000. This is very often a leftover
+`pnpm run dev:server` (or `pnpm run dev`) process from an earlier session that never
+stopped — a plain host process, not a Docker container, so **`docker compose down` will
+not free it** (it only removes this project's containers).
+
+Auto-fix — kills a leftover `tsx`/`node`/`vite` process holding this project's dev ports
+(3000, 5173), but deliberately leaves Docker's own processes alone (killing Docker's
+port-forwarding process takes down the whole Docker Desktop VM, not just one container):
+
+```bash
+pnpm run free-ports
+```
+
+Or do it manually:
+
+```bash
+lsof -nP -iTCP:3000 -sTCP:LISTEN
+kill <PID>
+```
+
+If the port is held by a Docker-related process (e.g. `com.docker.backend`) or by a
+container from a *different* project (`docker ps -a` lists all containers, not just this
+one), stop the container instead of killing the host process:
+
+```bash
+docker ps -a --format 'table {{.Names}}\t{{.Ports}}\t{{.Status}}'
+docker stop <container-name>
+```
+
+If you'd rather keep the other process running, publish the app on a different host port
+instead — edit `docker-compose.yml`'s `app` service `ports` entry, e.g.:
+
+```yaml
+ports:
+  - '3001:3000'
+```
+
+then open `http://localhost:3001`.

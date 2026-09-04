@@ -214,21 +214,24 @@ export function GameBoard({
         frozen ? 'ring-2 ring-danger' : ''
       }`}
     >
-      {/* CSS polish #3: the panel's own background, split into a seat-1/seat-2 half each —
-          whichever seat is currently on turn gets an orange tint over its half, so whose
-          turn it is reads at a glance without having to read either PlayerCard. Negative
-          z-index keeps it beneath every other child while still painting above the
-          section's (now transparent) own background; overflow-hidden on the section clips
-          it to the rounded corners. */}
+      {/* CSS polish #3: the panel's own background, split into a seat-1/seat-2 half each.
+          Whichever seat is currently on turn gets an accent tint over its half and the
+          other half gets a distinct neutral shade, so the two halves read as two clearly
+          different colors rather than "one tinted, one plain" — whose turn it is reads at
+          a glance without having to read either PlayerCard. Both halves fall back to the
+          same plain surface color while the game isn't active. Negative z-index keeps it
+          beneath every other child while still painting above the section's (now
+          transparent) own background; overflow-hidden on the section clips it to the
+          rounded corners. */}
       <div aria-hidden="true" className="absolute inset-0 -z-10 flex">
         <div
           className={`h-full w-1/2 transition-colors duration-500 ${
-            showTurnHighlight && game.currentSeat === 1 ? 'bg-accent/15' : 'bg-surface'
+            !showTurnHighlight ? 'bg-surface' : game.currentSeat === 1 ? 'bg-accent/25' : 'bg-surface-alt'
           }`}
         />
         <div
           className={`h-full w-1/2 transition-colors duration-500 ${
-            showTurnHighlight && game.currentSeat === 2 ? 'bg-accent/15' : 'bg-surface'
+            !showTurnHighlight ? 'bg-surface' : game.currentSeat === 2 ? 'bg-accent/25' : 'bg-surface-alt'
           }`}
         />
       </div>
@@ -254,9 +257,9 @@ export function GameBoard({
         </Button>
       </div>
 
-      <div className="mx-auto flex flex-col items-center justify-center gap-1 rounded-2xl bg-accent px-6 py-4 text-accent-foreground shadow-sm sm:px-8 sm:py-5">
-        <span className="text-xs font-semibold uppercase tracking-wide opacity-80">Goal score</span>
-        <span className="text-2xl font-extrabold sm:text-3xl">{game.targetScore}</span>
+      <div className="mx-auto flex flex-col items-center justify-center gap-1 rounded-2xl bg-accent px-10 py-6 text-accent-foreground shadow-sm sm:px-14 sm:py-8">
+        <span className="text-sm font-semibold uppercase tracking-wide opacity-80">Goal score</span>
+        <span className="text-4xl font-extrabold sm:text-5xl">{game.targetScore}</span>
       </div>
 
       {hasWinner && (
@@ -286,7 +289,7 @@ export function GameBoard({
         />
 
         <div
-          className={`flex items-center justify-center gap-2 rounded-xl bg-surface-alt px-3 py-3 sm:gap-4 sm:px-5 ${
+          className={`flex items-center justify-center gap-3 rounded-xl bg-surface-alt px-5 py-5 sm:gap-6 sm:px-8 sm:py-7 ${
             frozen ? 'outline outline-2 outline-danger' : ''
           }`}
         >

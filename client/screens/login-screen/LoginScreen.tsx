@@ -84,7 +84,10 @@ export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
     }
     if (password.length === 0) {
       errors.password = 'Password is required.';
-    } else if (password.length < PASSWORD_MIN_LENGTH) {
+    } else if (mode === 'register' && password.length < PASSWORD_MIN_LENGTH) {
+      // Length is only enforced on Sign In (registration) — Login authenticates an
+      // existing account, whose actual password may not fit this floor, and the server
+      // is the source of truth for whether it's correct either way.
       errors.password = `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`;
     } else if (mode === 'register' && !PASSWORD_STYLE_REGEX.test(password)) {
       errors.password = 'Password must contain at least one letter and one number.';
@@ -224,7 +227,7 @@ export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
           disabled={!csrfReady || submitting}
           icon={<KeyRound size={18} aria-hidden="true" />}
         >
-          {mode === 'login' ? 'Log in' : 'Register'}
+          {mode === 'login' ? 'Log in' : 'Sign In'}
         </Button>
 
         <p className="text-sm text-muted-foreground">

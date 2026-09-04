@@ -48,7 +48,7 @@ describe('LoginScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Sign In' }));
     await user.type(screen.getByLabelText('Username'), 'bob');
     await user.type(screen.getByLabelText('Password'), 'password123');
-    await user.click(screen.getByRole('button', { name: 'Register' }));
+    await user.click(screen.getByRole('button', { name: 'Sign In' }));
 
     await waitFor(() =>
       expect(registerSpy).toHaveBeenCalledWith({ username: 'bob', password: 'password123' }),
