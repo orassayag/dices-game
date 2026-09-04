@@ -36,3 +36,27 @@ but unused pending an M4 routing decision. Added `exactOptionalPropertyTypes` +
 `noUncheckedIndexedAccess` to tsconfig now rather than later. `shared/schemas.ts`'s placeholder
 `Item` schemas left in place — stage 2 (Contract, M2) replaces the whole file.
 **User overrides during review:** None recorded.
+
+## Stage 2 — Shared contract: Zod schemas, GameStateDto, derived busted, ExpectedVersionSchema (committed 2026-09-04)
+**Files:** shared/schemas.ts, shared/__tests__/schemas.test.ts
+**What was built:** `shared/schemas.ts` replaces the boilerplate's placeholder `Item`
+schemas wholesale with the real API contract from plan_v6.md §5: `GameStateSchema` (the
+full `GameStateDto` — `DieSchema`, discriminated-union `LastMoveSchema` over
+roll/hold/forfeit, pinned numeric bounds, `lastDice` as `[] | [Die, Die]`, and a
+`.transform` that derives the top-level `busted` field from `lastMove`, the single place
+`busted` is computed — I6), `CreateGameInputSchema` (`.strict()` + a mode/aiSeat
+cross-field `.refine` mirroring the stage-1 DB CHECKs), `ExpectedVersionSchema`
+(`.strict()`, non-negative integer), and `AuthCredentialsInputSchema`/`AuthResponseSchema`
+(cookie-based — no token in the body; password checked for both min length and a
+UTF-8 byte-length cap via a dedicated `TextEncoder` helper, since JS string length
+undercounts multi-byte characters against the bcrypt 72-byte limit). 33 new tests in
+`shared/__tests__/schemas.test.ts` covering derived-busted for all four lastMove cases,
+numeric-bound rejections, the cross-field refine both ways, strict extra-key rejection,
+and the UTF-8-byte-vs-JS-length password edge case. No route/auth/DB implementation in
+this stage — contract-only. Verified: type-check, lint, test (46/46), build,
+`prettier --check`.
+**Key decisions:** Auth schemas included here (not deferred to stage 3) since stage 3
+needs them to exist before implementing routes against them. Kept `shared/schemas.ts` as
+a single flat file, matching the already-established repo convention. Named constants for
+every numeric bound — no magic literals.
+**User overrides during review:** None recorded.

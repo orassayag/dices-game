@@ -28,7 +28,7 @@ the hard per-stage ceilings (10 files / 300 lines-per-file).
 
 ## Stages
 - Stage 1: COMMITTED — Foundation: Prisma schema+migrations+DB invariants, env config, error envelope, Tailwind, test infra (M0)
-- Stage 2: PLANNED — Shared contract: Zod schemas, GameStateDto, derived busted, ExpectedVersionSchema (M2)
+- Stage 2: COMMITTED — Shared contract: Zod schemas, GameStateDto, derived busted, ExpectedVersionSchema (M2)
 - Stage 3: PLANNED — Auth core: register/login/logout, bcrypt, JWT+tokenVersion, cookie, 503 path, auth rate limits (M1a)
 - Stage 4: PLANNED — Hardened CSRF: pre-auth token, HMAC-bound middleware, Origin check, __Host- prefix (M1b, I3/I9)
 - Stage 5: PLANNED — Domain engine + game happy path: pure roll/hold, create/get/roll/hold routes, guards (M3a)
