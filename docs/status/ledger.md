@@ -119,3 +119,34 @@ nonce to — stateless JWT auth). Logout now requires authentication, a delibera
 addition beyond stage 3's "clears cookies" text, needed for the CSRF check to bind to the
 real subject. 10 files touched, at the stage-sizing ceiling.
 **User overrides during review:** None recorded.
+
+## Stage 5 — Domain engine + game happy path: pure roll/hold, create/get/roll/hold routes, guards (committed 2026-09-04)
+**Files:** server/domain/gameEngine.ts, server/domain/gameGuards.ts,
+server/domain/__tests__/gameEngine.test.ts, server/domain/__tests__/gameGuards.test.ts,
+server/lib/gameMapper.ts, server/services/gameService.ts,
+server/services/__tests__/gameService.test.ts, server/routes/games.ts,
+server/routes/__tests__/games.test.ts, server/app.ts
+**What was built:** M3a per plan_v6.md §3/§4/§5/§6 (happy-path subset). Pure
+`roll`/`hold` engine (`server/domain/gameEngine.ts`) with an injected dice roller —
+6&6 busts the round score and passes the seat, hold banks the round score and sets
+`won` at `targetScore`; `createDiceRoller(seed?)` is real by default, deterministic
+mulberry32 when `DICE_SEED` is set. `gameGuards.ts` — `assertReadGuard` (owner
+404/403) and `assertActionGuard` (adds AI-seat rejection, `409 AI_TURN_REQUIRED`).
+`gameMapper.ts` maps a Prisma `Game`+latest `Move` to `GameStateDto` field-by-field
+through `GameStateSchema.parse` (derives `busted`, I6). `gameService.ts`'s
+`rollGame`/`holdGame` run inside a transaction with a `SELECT ... FOR UPDATE` row
+lock so `actorSeat` and the optimistic `expectedVersion` check see the same row; a
+zero-row update throws `VERSION_CONFLICT`. `routes/games.ts` adds
+create/get/roll/hold, all behind `requireAuth`, state-changing ones also behind
+`csrfProtection` + `validateBody`. 37 new tests (146/146 total). Verified:
+type-check, lint, test, build, `prettier --check`.
+**Key decisions:** `GET /games?status=in_progress` (list-my-games) deferred to stage
+6 alongside the abandon+create work it pairs with. `createGame` is a plain insert —
+no abandon-existing check yet, so a second live game hits the DB's partial unique
+index and falls through to a generic `500 DATABASE_CONSTRAINT` rather than `409
+GAME_CONFLICT` (explicitly stage 6 scope). Zero-row update never distinguishes
+`GAME_ABANDONED` yet (no abandon path exists). `User.wins` is not incremented on a
+win — that guarded counter increment is stage 6/M3b scope. 10 files touched, at the
+stage-sizing ceiling — each is a genuinely separate concern (pure rules /
+authorization / DB↔DTO translation / orchestration / HTTP).
+**User overrides during review:** None recorded.

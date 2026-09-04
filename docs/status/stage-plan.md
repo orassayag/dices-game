@@ -31,7 +31,7 @@ the hard per-stage ceilings (10 files / 300 lines-per-file).
 - Stage 2: COMMITTED — Shared contract: Zod schemas, GameStateDto, derived busted, ExpectedVersionSchema (M2)
 - Stage 3: COMMITTED — Auth core: register/login/logout, bcrypt, JWT+tokenVersion, cookie, 503 path, auth rate limits (M1a)
 - Stage 4: COMMITTED — Hardened CSRF: pre-auth token, HMAC-bound middleware, Origin check, __Host- prefix (M1b, I3/I9)
-- Stage 5: PLANNED — Domain engine + game happy path: pure roll/hold, create/get/roll/hold routes, guards (M3a)
+- Stage 5: COMMITTED — Domain engine + game happy path: pure roll/hold, create/get/roll/hold routes, guards (M3a)
 - Stage 6: PLANNED — Game hardening: concurrency, abandon+create, win increment, DB error mapping, gameplay rate limit (M3b)
 - Stage 7: PLANNED — Frontend core: apiClient, LoginScreen, GameScreen, resume, guarded board (M4a)
 - Stage 8: PLANNED — Frontend polish: 6&6 bust animation, error boundary, winner highlight, abandoned/finished notice (M4b)

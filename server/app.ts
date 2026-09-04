@@ -8,6 +8,7 @@ import morgan from 'morgan';
 import { env } from './config/env.js';
 import { errorHandler, routeNotFoundHandler } from './middleware/errorHandler.js';
 import { authRouter } from './routes/auth.js';
+import { gamesRouter } from './routes/games.js';
 
 const clientDistDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../dist/client');
 
@@ -36,8 +37,9 @@ export function createApp() {
   });
 
   app.use('/auth', authRouter);
+  app.use('/games', gamesRouter);
 
-  // Route handlers land here at M3/M5 (game, ai-turn).
+  // ai-turn lands at M5 (server/routes/games.ts or a sibling router).
 
   // In production the server is the single deployment unit: it serves the
   // Vite-built client alongside the API. In dev, Vite serves the client.
