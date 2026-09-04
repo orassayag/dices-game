@@ -17,13 +17,13 @@ pnpm run dev
 
 The server runs on `http://localhost:3000`, the client on `http://localhost:5173`.
 
-Open `http://localhost:5173`, register (or log in), then start a game. Roll as many
+Open `http://localhost:5173`, register (or log in), then start a game. When creating a
+game, choose **two human players** (log out and back in as a second user to take the
+second seat) or **play against the AI** (pick which seat the AI takes). Roll as many
 times as you like each turn — rolling 6 & 6 loses the round score and passes the turn;
-holding banks the round score and passes the turn. First to the target score wins. To
-try both players, log out and log back in as a second user in the same browser.
-
-> The AI opponent isn't wired up yet (it lands later in the plan) — for now, play as two
-> human players taking turns on the same screen.
+holding banks the round score and passes the turn. First to the target score wins. The
+AI opponent plays automatically on its turn using a built-in decision heuristic — no
+API key or external service required.
 
 ## Running the tests
 
