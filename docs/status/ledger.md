@@ -184,3 +184,36 @@ Deliberately did NOT extract a shared `rateLimitHandler.ts` for `auth.ts`'s and
 stage to 11 touched files; reverted to keep `auth.ts` out of this stage's diff and gave
 `games.ts` its own local copy (9 files touched, under the ceiling).
 **User overrides during review:** None recorded.
+
+## Stage 7 — Frontend core: apiClient, LoginScreen, GameScreen, resume, guarded board (committed 2026-09-04)
+**Files:** client/api/apiClient.ts, client/api/authApi.ts, client/api/gamesApi.ts,
+client/api/__tests__/apiClient.test.ts, client/screens/login-screen/LoginScreen.tsx,
+client/screens/login-screen/__tests__/LoginScreen.test.tsx,
+client/screens/game-screen/GameScreen.tsx,
+client/screens/game-screen/__tests__/GameScreen.test.tsx,
+client/components/game-board/GameBoard.tsx, client/App.tsx
+**What was built:** M4a per plan_v6.md §8 on top of the M1-M3b backend. `apiClient` is
+the single fetch boundary: `credentials: 'include'`, `X-CSRF-Token` header attachment on
+state-changing methods, error-envelope discrimination into a typed `ApiError`, bounded
+retry-once on transient `503 SERVICE_UNAVAILABLE` (I8). `apiRequest` returns `unknown` —
+every caller validates the body against the real shared Zod schema, never casts.
+`gamesApi`'s `performGameAction` centrally recovers from `409 VERSION_CONFLICT` by
+refetching `GET /games/:id` (§8). `LoginScreen` fetches the pre-auth CSRF token on mount
+and gates submit on it (I9). `GameScreen` resumes an in-progress game via
+`GET /games?status=in_progress` or shows a create-game form; routes back to
+`LoginScreen` on `UNAUTHORIZED`. `GameBoard` renders `GameStateDto`, guards
+`lastMove === null`, disables actions once the game isn't `in_progress`. 6&6 bust
+animation, error boundary, winner highlighting, and abandoned/finished notices are
+explicitly deferred to stage 8 (M4b). Verified: type-check, lint, test (187/187 across
+19 suites), build, `prettier --check`.
+**Key decisions:** `mode`/`aiSeat` create-game UI deferred to stage 10 (no working
+ai-turn endpoint yet) — `GameScreen` hardcodes `mode: 'human'`. `react-router-dom` stays
+an unused dependency (no router needed — two screens switch on local auth state); removal
+left for a later cleanup pass to avoid pulling `package.json`/`pnpm-lock.yaml` into this
+stage's diff. `vite.config.ts`'s `/api` proxy is stale/unused dead config, left untouched
+for the same file-ceiling reason. API base URL detected via `window.location.port`
+rather than `import.meta.env.DEV` to avoid a new `vite-env.d.ts` file. `GameBoard` has no
+dedicated test file — its guarded-rendering behavior is exercised via `GameScreen.test.tsx`
+(no complex internal logic of its own). HTTP mocking uses `vi.stubGlobal('fetch', ...)`
+directly, not MSW (not yet a dependency; same file-ceiling pressure).
+**User overrides during review:** None recorded.

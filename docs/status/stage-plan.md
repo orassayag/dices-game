@@ -33,7 +33,7 @@ the hard per-stage ceilings (10 files / 300 lines-per-file).
 - Stage 4: COMMITTED — Hardened CSRF: pre-auth token, HMAC-bound middleware, Origin check, __Host- prefix (M1b, I3/I9)
 - Stage 5: COMMITTED — Domain engine + game happy path: pure roll/hold, create/get/roll/hold routes, guards (M3a)
 - Stage 6: COMMITTED — Game hardening: concurrency, abandon+create, win increment, DB error mapping, gameplay rate limit (M3b)
-- Stage 7: IN PROGRESS — Frontend core: apiClient, LoginScreen, GameScreen, resume, guarded board (M4a)
+- Stage 7: COMMITTED — Frontend core: apiClient, LoginScreen, GameScreen, resume, guarded board (M4a)
 - Stage 8: PLANNED — Frontend polish: 6&6 bust animation, error boundary, winner highlight, abandoned/finished notice (M4b)
 - Stage 9: PLANNED — AI opponent core: provider adapter, heuristic fallback, deadline race, single-flight+semaphore (M5a, I2)
 - Stage 10: PLANNED — AI opponent integration: ai-turn route, aiMoveCount cap+forfeit, frontend AI loop (M5b, I1/I4)

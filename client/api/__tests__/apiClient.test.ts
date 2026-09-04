@@ -1,0 +1,131 @@
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { apiRequest, ApiError } from '../apiClient';
+
+function mockFetchResponse(
+  status: number,
+  body: unknown,
+  ok: boolean = status >= 200 && status < 300,
+) {
+  return {
+    ok,
+    status,
+    json: () => Promise.resolve(body),
+  } as Response;
+}
+
+function clearCookies(): void {
+  document.cookie.split('; ').forEach((entry) => {
+    const name = entry.split('=')[0];
+    if (name) {
+      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+    }
+  });
+}
+
+describe('apiRequest', () => {
+  beforeEach(() => {
+    clearCookies();
+    vi.stubGlobal('fetch', vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('should send credentials: include on every request', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(mockFetchResponse(200, { ok: true }));
+
+    await apiRequest('/games');
+
+    const [, options] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
+    expect(options.credentials).toBe('include');
+  });
+
+  it('should not attach an X-CSRF-Token header on a GET request', async () => {
+    document.cookie = 'csrfToken=abc123';
+    vi.mocked(fetch).mockResolvedValueOnce(mockFetchResponse(200, { ok: true }));
+
+    await apiRequest('/games');
+
+    const [, options] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
+    const headers = options.headers as Record<string, string>;
+    expect(headers['X-CSRF-Token']).toBeUndefined();
+  });
+
+  it('should attach the X-CSRF-Token header from the dev csrfToken cookie on a POST', async () => {
+    document.cookie = 'csrfToken=abc123';
+    vi.mocked(fetch).mockResolvedValueOnce(mockFetchResponse(201, { id: '1' }));
+
+    await apiRequest('/games', { method: 'POST', body: { targetScore: 100 } });
+
+    const [, options] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
+    const headers = options.headers as Record<string, string>;
+    expect(headers['X-CSRF-Token']).toBe('abc123');
+  });
+
+  it('should attach the X-CSRF-Token header from the production __Host-csrfToken cookie', async () => {
+    // jsdom enforces the real __Host- prefix rules (Secure + https origin), which a
+    // plain document.cookie assignment can't satisfy in this test's http origin — stub
+    // the getter directly to test our own parsing logic, not jsdom's cookie jar.
+    vi.spyOn(document, 'cookie', 'get').mockReturnValue('__Host-csrfToken=prodtoken');
+    vi.mocked(fetch).mockResolvedValueOnce(mockFetchResponse(200, { ok: true }));
+
+    await apiRequest('/games/1/roll', { method: 'POST', body: { expectedVersion: 0 } });
+
+    const [, options] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
+    const headers = options.headers as Record<string, string>;
+    expect(headers['X-CSRF-Token']).toBe('prodtoken');
+  });
+
+  it('should throw an ApiError carrying the envelope code/message/status on a non-2xx response', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      mockFetchResponse(404, { error: { code: 'GAME_NOT_FOUND', message: 'Game not found.' } }),
+    );
+
+    await expect(apiRequest('/games/missing')).rejects.toMatchObject({
+      errorCode: 'GAME_NOT_FOUND',
+      message: 'Game not found.',
+      status: 404,
+    });
+  });
+
+  it('should throw a DATABASE_CONSTRAINT ApiError when the error body does not match the envelope', async () => {
+    vi.mocked(fetch).mockResolvedValue(mockFetchResponse(500, { unexpected: true }));
+
+    await expect(apiRequest('/games')).rejects.toBeInstanceOf(ApiError);
+    await expect(apiRequest('/games')).rejects.toMatchObject({ errorCode: 'DATABASE_CONSTRAINT' });
+  });
+
+  it('should return undefined for a 204 No Content response without parsing a body', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      status: 204,
+      json: () => Promise.reject(new Error('should not be called')),
+    } as Response);
+
+    await expect(apiRequest('/auth/logout', { method: 'POST' })).resolves.toBeUndefined();
+  });
+
+  it('should retry a 503 SERVICE_UNAVAILABLE and return the eventual success', async () => {
+    const serviceUnavailable = mockFetchResponse(503, {
+      error: { code: 'SERVICE_UNAVAILABLE', message: 'Try again.' },
+    });
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(serviceUnavailable)
+      .mockResolvedValueOnce(serviceUnavailable)
+      .mockResolvedValueOnce(mockFetchResponse(200, { ok: true }));
+
+    await expect(apiRequest('/games')).resolves.toEqual({ ok: true });
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('should give up after exhausting 503 retries and throw the SERVICE_UNAVAILABLE ApiError', async () => {
+    const serviceUnavailable = mockFetchResponse(503, {
+      error: { code: 'SERVICE_UNAVAILABLE', message: 'Try again.' },
+    });
+    vi.mocked(fetch).mockResolvedValue(serviceUnavailable);
+
+    await expect(apiRequest('/games')).rejects.toMatchObject({ errorCode: 'SERVICE_UNAVAILABLE' });
+  });
+});

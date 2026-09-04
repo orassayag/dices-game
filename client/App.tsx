@@ -1,9 +1,20 @@
-// Real screens (LoginScreen, GameScreen) land at M4 (master stages 7-8) — this
-// placeholder just confirms the M0 Tailwind + build pipeline renders.
+import { useState } from 'react';
+import { LoginScreen } from './screens/login-screen/LoginScreen';
+import { GameScreen } from './screens/game-screen/GameScreen';
+
+interface AuthenticatedUser {
+  id: string;
+  username: string;
+}
+
+// No router: two screens with no distinct URLs (§8) — multiple players are simulated on
+// this one page, not multiple browser sessions, so there's nothing for a URL to address.
 export default function App() {
-  return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-100">
-      <p className="text-sm text-slate-400">Dice game — foundation stage. UI lands at M4.</p>
-    </main>
-  );
+  const [user, setUser] = useState<AuthenticatedUser | null>(null);
+
+  if (!user) {
+    return <LoginScreen onAuthenticated={setUser} />;
+  }
+
+  return <GameScreen user={user} onSessionExpired={() => setUser(null)} />;
 }
