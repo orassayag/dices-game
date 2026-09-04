@@ -23,6 +23,7 @@ import {
   listInProgressGames,
   rollGame,
 } from '../services/gameService.js';
+import { aiTurnGame } from '../services/ai/aiTurnService.js';
 
 export const gamesRouter: Router = Router();
 
@@ -123,6 +124,24 @@ gamesRouter.post(
   async (req: GameActionRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const game = await holdGame(req.params.id, requireUserId(req), req.body.expectedVersion);
+      res.status(200).json(game);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// The only path to the AI seat (§3) — assertAiTurnGuard inside aiTurnGame rejects
+// anything else. Heuristic-only in production (no provider argument passed here, M5b
+// per stage 9's decision); shares the same gameplay rate limiter as roll/hold (§10).
+gamesRouter.post(
+  '/:id/ai-turn',
+  gameplayRateLimiter,
+  csrfProtection,
+  validateBody(ExpectedVersionSchema),
+  async (req: GameActionRequest, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const game = await aiTurnGame(req.params.id, requireUserId(req), req.body.expectedVersion);
       res.status(200).json(game);
     } catch (error) {
       next(error);

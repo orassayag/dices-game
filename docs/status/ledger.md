@@ -250,3 +250,42 @@ branching logic of its own; both sides of the composition are already covered by
 **What was built:** AiDecisionProvider adapter contract + AiDecisionSchema; HeuristicProvider (mandatory deterministic fallback, no API key required); resolveAiDecision (Promise.race deadline of AI_DEADLINE_MS=3000ms + AbortSignal.timeout, output validation, onProviderSettled hook); claimAiTurn/releaseAiTurnClaim single-flight lock + AiProviderSemaphore bounded concurrency (I2), both released only on real provider settlement.
 **Key decisions:** Heuristic-only for this project per explicit developer choice (plan's Open Questions item) — provider param is nullable so a real LLM adapter drops in later with no engine/route changes. onProviderSettled hook over exposing two promises. safeParse over parse+try/catch. legalActions always ['roll','hold']. Full DB-integration AI tests (aiBoundary, ai, aiSingleFlight, aiHungLeak, aiCap) deferred to stage 10 (M5b) since they need the route/transaction/aiMoveCount.
 **User overrides during review:** None.
+
+## Stage 10 — AI opponent integration: ai-turn route, aiMoveCount cap+forfeit, frontend AI loop (M5b, I1/I4) (committed 2026-09-04)
+**Files:** server/domain/gameGuards.ts, server/domain/__tests__/gameGuards.test.ts,
+server/services/gameService.ts, server/services/ai/buildAiDecisionContext.ts,
+server/services/ai/__tests__/buildAiDecisionContext.test.ts,
+server/services/ai/aiTurnService.ts, server/services/ai/__tests__/aiTurnService.test.ts,
+server/routes/games.ts, client/api/gamesApi.ts,
+client/screens/game-screen/GameScreen.tsx,
+client/screens/game-screen/__tests__/GameScreen.test.tsx
+**What was built:** M5b (plan_v6.md §9) wires stage 9's AI primitives (heuristic
+fallback, deadline race, single-flight claim, bounded semaphore) into one committed move
+per `POST /games/:id/ai-turn` request. `assertAiTurnGuard` (the inverse of
+`assertActionGuard`) enforces read-guard + `mode==='ai'` + `currentSeat===aiSeat`.
+`buildAiDecisionContext` maps a `Game` row + acting seat to the six-field
+`AiDecisionContext` boundary. `aiTurnService.ts`'s `aiTurnGame()` claims the
+single-flight lock, checks the `aiMoveCount` cap BEFORE computing a decision (I1 — a
+move hitting the cap boundary that wins still finishes; the 51st attempt forfeits
+without incrementing past 50), then commits via `aiRollMove`/`aiHoldMove` or
+`forfeitAiTurn` (clears round score per I4). The route reuses roll/hold's exact
+middleware stack. Frontend: mode/aiSeat create-form selectors (previously hardcoded to
+`'human'`) and a polling-free `useEffect` AI-turn loop that fires whenever it becomes
+the AI seat's turn and stops itself on pass/forfeit/game-end. Verified: type-check,
+lint, test (239/239 across 26 suites — 20 new), test:coverage (88.89%/87.24%/81.41%,
+above the 60/60/50 thresholds), build, `prettier --check`.
+**Key decisions:** Reused `AI_TURN_REQUIRED` for `assertAiTurnGuard`'s failure rather
+than adding a dedicated error code (both guards reject the same class of mistake from
+opposite directions; flagged as an open question if a distinct code is preferred).
+`aiRollMove`/`aiHoldMove`/`forfeitAiTurn` kept as separate, un-shared functions in their
+own `aiTurnService.ts` file, matching the existing `gameService.ts` convention and
+staying under the 300-line-per-file ceiling. Claim/semaphore release ownership is a
+single boolean handed to `resolveAiDecision`'s `onProviderSettled` hook when a real
+provider is configured (heuristic-only path always releases in `aiTurnGame`'s own
+`finally`). Stage touches 11 files, one over the 10-file soft ceiling — this is the
+plan's final stage with no later stage to defer the overflow to; every file is
+load-bearing for one inseparable feature. No dedicated route-level smoke test for
+`/ai-turn` was added to hold the file count as close to the ceiling as possible — the
+route is a direct copy of roll/hold's proven wiring and `aiTurnGame` is already
+exhaustively covered at the service level.
+**User overrides during review:** None recorded.

@@ -2,7 +2,7 @@
 import type { Game } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 import { AppError, ConflictError, ForbiddenError, NotFoundError } from '../../lib/errors.js';
-import { assertActionGuard, assertReadGuard } from '../gameGuards.js';
+import { assertActionGuard, assertAiTurnGuard, assertReadGuard } from '../gameGuards.js';
 
 const OWNER_ID = 'owner-1';
 
@@ -64,5 +64,34 @@ describe('assertActionGuard', () => {
   it('should enforce ownership before the seat check', () => {
     const game = buildGame({ mode: 'ai', aiSeat: 1, currentSeat: 1 });
     expect(() => assertActionGuard(game, 'someone-else')).toThrow(ForbiddenError);
+  });
+});
+
+describe('assertAiTurnGuard', () => {
+  it('should pass when the game is ai-mode and the current seat is the AI seat', () => {
+    const game = buildGame({ mode: 'ai', aiSeat: 1, currentSeat: 1 });
+    expect(() => assertAiTurnGuard(game, OWNER_ID)).not.toThrow();
+  });
+
+  it('should throw a ConflictError with AI_TURN_REQUIRED for a human-mode game', () => {
+    const game = buildGame({ mode: 'human' });
+
+    try {
+      assertAiTurnGuard(game, OWNER_ID);
+      expect.unreachable('assertAiTurnGuard should have thrown');
+    } catch (error) {
+      expect(error).toBeInstanceOf(ConflictError);
+      expect((error as AppError).errorCode).toBe('AI_TURN_REQUIRED');
+    }
+  });
+
+  it('should throw AI_TURN_REQUIRED when the current seat is the human seat in an ai-mode game', () => {
+    const game = buildGame({ mode: 'ai', aiSeat: 2, currentSeat: 1 });
+    expect(() => assertAiTurnGuard(game, OWNER_ID)).toThrow(ConflictError);
+  });
+
+  it('should enforce ownership before the mode/seat check', () => {
+    const game = buildGame({ mode: 'ai', aiSeat: 1, currentSeat: 1 });
+    expect(() => assertAiTurnGuard(game, 'someone-else')).toThrow(ForbiddenError);
   });
 });

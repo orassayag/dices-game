@@ -27,3 +27,21 @@ export function assertActionGuard(game: Game | null, userId: string): asserts ga
     });
   }
 }
+
+// Read guard AND the *inverse* seat check: mode must be 'ai' and the current seat must
+// be the AI's. Deliberately its own explicit check rather than derived from
+// assertActionGuard — mixing the two would silently invert on a maintenance edit, so a
+// later reader doesn't "fix" this back to the action guard's shape (§3).
+//
+// Reuses AI_TURN_REQUIRED rather than a new error code: server/lib/errors.ts already
+// documents ConflictError as shared by this whole guard family ("the caller picks the
+// code"), and both failures are the same class of mistake — acting through the wrong
+// seat channel — just from opposite directions.
+export function assertAiTurnGuard(game: Game | null, userId: string): asserts game is Game {
+  assertReadGuard(game, userId);
+  if (game.mode !== 'ai' || game.currentSeat !== game.aiSeat) {
+    throw new ConflictError("It is not currently the AI seat's turn.", {
+      errorCode: 'AI_TURN_REQUIRED',
+    });
+  }
+}

@@ -34,6 +34,14 @@ async function holdGameOnce(id: string, expectedVersion: number): Promise<GameSt
   return GameStateSchema.parse(body);
 }
 
+async function aiTurnGameOnce(id: string, expectedVersion: number): Promise<GameStateDto> {
+  const body = await apiRequest(`/games/${id}/ai-turn`, {
+    method: 'POST',
+    body: { expectedVersion },
+  });
+  return GameStateSchema.parse(body);
+}
+
 export interface GameActionResult {
   state: GameStateDto;
   /** True when a stale `expectedVersion` was recovered by refetching (§8) — the caller
@@ -68,4 +76,11 @@ export async function rollGame(id: string, expectedVersion: number): Promise<Gam
 
 export async function holdGame(id: string, expectedVersion: number): Promise<GameActionResult> {
   return await performGameAction(id, () => holdGameOnce(id, expectedVersion));
+}
+
+/** Drives the AI seat one move forward (§9). The caller (GameScreen) re-calls this
+ * while `state.mode === 'ai' && state.currentSeat === state.aiSeat` — the same
+ * version-conflict recovery as roll/hold applies here too. */
+export async function aiTurnGame(id: string, expectedVersion: number): Promise<GameActionResult> {
+  return await performGameAction(id, () => aiTurnGameOnce(id, expectedVersion));
 }

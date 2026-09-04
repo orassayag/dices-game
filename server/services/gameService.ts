@@ -15,8 +15,10 @@ import { mapGameToDto } from '../lib/gameMapper.js';
 
 // One process-wide roller: real (Math.random) unless DICE_SEED is set, in which case
 // every roll in the process shares one deterministic sequence (§13). Routes never pass
-// a roller explicitly; tests that need a specific outcome pass their own.
-const defaultDiceRoller: DiceRoller = createDiceRoller(env.diceSeed);
+// a roller explicitly; tests that need a specific outcome pass their own. Exported so
+// server/services/ai/aiTurnService.ts (M5b) shares the same single sequence rather than
+// instantiating a second seeded roller.
+export const defaultDiceRoller: DiceRoller = createDiceRoller(env.diceSeed);
 
 const UNIQUE_CONSTRAINT_VIOLATION_CODE: string = 'P2002';
 
@@ -100,8 +102,9 @@ export async function getGame(gameId: string, userId: string): Promise<GameState
 // than a generic conflict. A zero-row update can also mean the game finished in the
 // meantime — that case still falls through to VERSION_CONFLICT, matching the reference
 // implementation, since the client's own refetch-on-conflict recovery (§8) surfaces the
-// real status either way.
-async function assertVersionMatched(
+// real status either way. Exported so aiTurnService.ts (M5b)'s roll/hold/forfeit
+// transactions reuse the identical zero-row mapping rather than a second copy of it.
+export async function assertVersionMatched(
   tx: Prisma.TransactionClient,
   gameId: string,
   updatedCount: number,

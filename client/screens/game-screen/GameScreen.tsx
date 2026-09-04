@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import type { GameStateDto } from '../../../shared/index';
+import type { CreateGameInput, GameStateDto } from '../../../shared/index';
 import { ApiError } from '../../api/apiClient';
 import {
+  aiTurnGame,
   createGame,
   holdGame,
   listInProgressGames,
@@ -23,6 +24,7 @@ interface GameScreenProps {
 const DEFAULT_TARGET_SCORE: number = 100;
 const TARGET_SCORE_MIN: number = 10;
 const TARGET_SCORE_MAX: number = 1000;
+const DEFAULT_AI_SEAT: 1 | 2 = 2; // the human plays seat 1 by default when starting an AI game
 
 function friendlyErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
@@ -36,6 +38,8 @@ export function GameScreen({ user, onSessionExpired }: GameScreenProps) {
   const [loading, setLoading] = useState<boolean>(true);
   const [busy, setBusy] = useState<boolean>(false);
   const [targetScoreInput, setTargetScoreInput] = useState<number>(DEFAULT_TARGET_SCORE);
+  const [modeInput, setModeInput] = useState<'human' | 'ai'>('human');
+  const [aiSeatInput, setAiSeatInput] = useState<1 | 2>(DEFAULT_AI_SEAT);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
@@ -92,13 +96,29 @@ export function GameScreen({ user, onSessionExpired }: GameScreenProps) {
     }
   }
 
-  // mode/aiSeat is hardcoded 'human' — that selector is deferred to stage 10 alongside
-  // the AI opponent it configures; exposing it earlier would let a player create an AI
-  // game with no working ai-turn endpoint yet.
+  // The AI seat plays itself (§9): whenever it becomes the AI's turn, call ai-turn once
+  // and let the resulting state change re-trigger this effect — it stops on its own once
+  // the seat passes (bust/hold), a forfeit hands the turn back, or the game ends. Gated
+  // on `busy` so it never overlaps a human action or a previous ai-turn call in flight.
+  useEffect(() => {
+    if (!game || busy) {
+      return;
+    }
+    if (game.status !== 'in_progress' || game.mode !== 'ai' || game.currentSeat !== game.aiSeat) {
+      return;
+    }
+    void runAction(() => aiTurnGame(game.id, game.version));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game, busy]);
+
   async function handleCreate(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     await runAction(async () => {
-      const state = await createGame({ targetScore: targetScoreInput, mode: 'human' });
+      const input: CreateGameInput =
+        modeInput === 'ai'
+          ? { targetScore: targetScoreInput, mode: 'ai', aiSeat: aiSeatInput }
+          : { targetScore: targetScoreInput, mode: 'human' };
+      const state = await createGame(input);
       return { state, versionConflictRecovered: false };
     });
   }
@@ -175,6 +195,30 @@ export function GameScreen({ user, onSessionExpired }: GameScreenProps) {
               className="rounded border border-slate-700 bg-slate-800 px-3 py-2"
             />
           </label>
+          <label className="flex flex-col gap-1 text-sm">
+            Opponent
+            <select
+              value={modeInput}
+              onChange={(event) => setModeInput(event.target.value === 'ai' ? 'ai' : 'human')}
+              className="rounded border border-slate-700 bg-slate-800 px-3 py-2"
+            >
+              <option value="human">Human (play both seats)</option>
+              <option value="ai">AI</option>
+            </select>
+          </label>
+          {modeInput === 'ai' && (
+            <label className="flex flex-col gap-1 text-sm">
+              AI plays seat
+              <select
+                value={aiSeatInput}
+                onChange={(event) => setAiSeatInput(event.target.value === '2' ? 2 : 1)}
+                className="rounded border border-slate-700 bg-slate-800 px-3 py-2"
+              >
+                <option value={1}>Player 1</option>
+                <option value={2}>Player 2</option>
+              </select>
+            </label>
+          )}
           <button
             type="submit"
             disabled={busy}

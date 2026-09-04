@@ -101,4 +101,71 @@ describe('GameScreen', () => {
     ).toBeInTheDocument();
     await waitFor(() => expect(gamesApi.listInProgressGames).toHaveBeenCalledTimes(2));
   });
+
+  describe('AI opponent selection (§8)', () => {
+    it('should show the AI seat selector only after choosing the AI opponent', async () => {
+      vi.spyOn(gamesApi, 'listInProgressGames').mockResolvedValue([]);
+      const user = userEvent.setup();
+      render(<GameScreen user={USER} onSessionExpired={vi.fn()} />);
+      await screen.findByRole('heading', { name: 'Start a new game' });
+
+      expect(screen.queryByLabelText('AI plays seat')).not.toBeInTheDocument();
+      await user.selectOptions(screen.getByLabelText('Opponent'), 'ai');
+
+      expect(screen.getByLabelText('AI plays seat')).toBeInTheDocument();
+    });
+
+    it('should create an ai-mode game with the chosen aiSeat', async () => {
+      vi.spyOn(gamesApi, 'listInProgressGames').mockResolvedValue([]);
+      const createSpy = vi
+        .spyOn(gamesApi, 'createGame')
+        .mockResolvedValue(freshGame({ mode: 'ai', aiSeat: 2 }));
+      const user = userEvent.setup();
+      render(<GameScreen user={USER} onSessionExpired={vi.fn()} />);
+      await screen.findByRole('heading', { name: 'Start a new game' });
+
+      await user.selectOptions(screen.getByLabelText('Opponent'), 'ai');
+      await user.selectOptions(screen.getByLabelText('AI plays seat'), '2');
+      await user.click(screen.getByRole('button', { name: 'Start Game' }));
+
+      await waitFor(() =>
+        expect(createSpy).toHaveBeenCalledWith({ targetScore: 100, mode: 'ai', aiSeat: 2 }),
+      );
+    });
+  });
+
+  describe('AI turn loop (§8, §9)', () => {
+    it('should call aiTurnGame automatically when it becomes the AI seat’s turn', async () => {
+      vi.spyOn(gamesApi, 'listInProgressGames').mockResolvedValue([
+        freshGame({ mode: 'ai', aiSeat: 1, currentSeat: 1, version: 5 }),
+      ]);
+      const aiTurnSpy = vi.spyOn(gamesApi, 'aiTurnGame').mockResolvedValue({
+        state: freshGame({ mode: 'ai', aiSeat: 1, currentSeat: 2, version: 6 }),
+        versionConflictRecovered: false,
+      });
+      render(<GameScreen user={USER} onSessionExpired={vi.fn()} />);
+
+      await waitFor(() => expect(aiTurnSpy).toHaveBeenCalledWith('g1', 5));
+    });
+
+    it('should stop looping once a forfeit hands the turn back to the human seat', async () => {
+      vi.spyOn(gamesApi, 'listInProgressGames').mockResolvedValue([
+        freshGame({ mode: 'ai', aiSeat: 1, currentSeat: 1, version: 5 }),
+      ]);
+      const aiTurnSpy = vi.spyOn(gamesApi, 'aiTurnGame').mockResolvedValue({
+        state: freshGame({
+          mode: 'ai',
+          aiSeat: 1,
+          currentSeat: 2,
+          version: 6,
+          lastMove: { kind: 'forfeit' },
+        }),
+        versionConflictRecovered: false,
+      });
+      render(<GameScreen user={USER} onSessionExpired={vi.fn()} />);
+
+      await screen.findByText('AI gave up its turn.');
+      await waitFor(() => expect(aiTurnSpy).toHaveBeenCalledTimes(1));
+    });
+  });
 });
