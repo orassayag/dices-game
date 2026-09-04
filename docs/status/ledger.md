@@ -217,3 +217,30 @@ dedicated test file — its guarded-rendering behavior is exercised via `GameScr
 (no complex internal logic of its own). HTTP mocking uses `vi.stubGlobal('fetch', ...)`
 directly, not MSW (not yet a dependency; same file-ceiling pressure).
 **User overrides during review:** None recorded.
+
+## Stage 8 — Frontend polish: 6&6 bust animation, error boundary, winner highlight, abandoned/finished notice (committed 2026-09-04)
+**Files:** client/lib/logger.ts, client/components/error-boundary/ErrorBoundary.tsx,
+client/components/error-boundary/__tests__/ErrorBoundary.test.tsx,
+client/components/game-board/__tests__/GameBoard.test.tsx,
+client/components/game-board/GameBoard.tsx, client/screens/game-screen/GameScreen.tsx,
+client/screens/game-screen/__tests__/GameScreen.test.tsx, client/App.tsx
+**What was built:** M4b per plan_v6.md §8 on top of stage 7's frontend core. `GameBoard`
+derives a `frozen` bust state (~1.2s) from `game.busted`/`game.version` via a `useEffect`
+timer (Extra 4) — disables Roll/Hold, shows a red-ringed bust message, and clears early on
+the next non-busted state instead of only on timeout. The winning player's score panel
+gets a distinct emerald highlight. A new `StatusNotice` sub-component replaces the old
+bare "Winner: Player N" line with a clear finished/abandoned notice. `GameScreen` now
+special-cases `GAME_ABANDONED` before the generic `ApiError` path: shows a distinct notice
+and reloads `GET /games?status=in_progress` rather than leaving a stale board under a red
+error line. `ErrorBoundary` (necessarily a class component — React's error-boundary
+lifecycle has no hook form) wraps `GameScreen` in `App.tsx`, logging caught errors through
+a new minimal `client/lib/logger.ts` (mirrors the server's scoped-logger shape;
+`console.*` is its unavoidable browser sink, but every call site still goes through
+`createLogger()`). Verified: type-check, lint, test (197/197 across 21 suites — 10 new),
+build, `prettier --check`.
+**Key decisions:** `GAME_ABANDONED` handled at the `GameScreen` level (screen-level UI
+concern), not centrally in `gamesApi.performGameAction` like `VERSION_CONFLICT` (a pure
+data refetch). No dedicated `App.test.tsx` — the one-line `ErrorBoundary` wrapping has no
+branching logic of its own; both sides of the composition are already covered by
+`ErrorBoundary.test.tsx` and `GameScreen.test.tsx`.
+**User overrides during review:** None recorded.

@@ -73,6 +73,19 @@ export function GameScreen({ user, onSessionExpired }: GameScreenProps) {
         onSessionExpired();
         return;
       }
+      if (error instanceof ApiError && error.errorCode === 'GAME_ABANDONED') {
+        // §8: a GAME_ABANDONED response shows a distinct notice and reloads the
+        // in-progress list — the abandon+create transaction (M3b) may already have a
+        // fresh game waiting.
+        setErrorMessage('This game was abandoned. Loading your latest game…');
+        try {
+          const games = await listInProgressGames();
+          setGame(games[0] ?? null);
+        } catch (reloadError) {
+          setErrorMessage(friendlyErrorMessage(reloadError));
+        }
+        return;
+      }
       setErrorMessage(friendlyErrorMessage(error));
     } finally {
       setBusy(false);

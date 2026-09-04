@@ -83,4 +83,22 @@ describe('GameScreen', () => {
 
     await waitFor(() => expect(onSessionExpired).toHaveBeenCalled());
   });
+
+  it('should show an abandoned notice and load the fresh game on a GAME_ABANDONED error', async () => {
+    const freshOwnedGame = freshGame({ id: 'g2', version: 0 });
+    vi.spyOn(gamesApi, 'listInProgressGames')
+      .mockResolvedValueOnce([freshGame({ version: 3 })])
+      .mockResolvedValueOnce([freshOwnedGame]);
+    vi.spyOn(gamesApi, 'rollGame').mockRejectedValue(
+      new ApiError('GAME_ABANDONED', 'This game was abandoned before the action was applied.', 409),
+    );
+    const user = userEvent.setup();
+    render(<GameScreen user={USER} onSessionExpired={vi.fn()} />);
+    await user.click(await screen.findByRole('button', { name: 'Roll' }));
+
+    expect(
+      await screen.findByText(/This game was abandoned\. Loading your latest game/),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(gamesApi.listInProgressGames).toHaveBeenCalledTimes(2));
+  });
 });
