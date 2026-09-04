@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { LoginScreen } from './screens/login-screen/LoginScreen';
 import { GameScreen } from './screens/game-screen/GameScreen';
 import { ErrorBoundary } from './components/error-boundary/ErrorBoundary';
+import { ThemeToggle } from './components/theme-toggle/ThemeToggle';
 
 interface AuthenticatedUser {
   id: string;
@@ -13,13 +14,20 @@ interface AuthenticatedUser {
 export default function App() {
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
 
-  if (!user) {
-    return <LoginScreen onAuthenticated={setUser} />;
-  }
-
   return (
-    <ErrorBoundary>
-      <GameScreen user={user} onSessionExpired={() => setUser(null)} />
-    </ErrorBoundary>
+    <>
+      <ThemeToggle />
+      {user ? (
+        <ErrorBoundary>
+          <GameScreen
+            user={user}
+            onSessionExpired={() => setUser(null)}
+            onLogout={() => setUser(null)}
+          />
+        </ErrorBoundary>
+      ) : (
+        <LoginScreen onAuthenticated={setUser} />
+      )}
+    </>
   );
 }

@@ -38,6 +38,7 @@
     "express-rate-limit": "8.7.0",
     "helmet": "^8.0.0",
     "jsonwebtoken": "9.0.3",
+    "lucide-react": "1.40.0",
     "morgan": "^1.10.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

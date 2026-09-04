@@ -1,6 +1,7 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { CreateGameInput, GameStateDto } from '../../../shared/index';
 import { ApiError } from '../../api/apiClient';
+import { logout } from '../../api/authApi';
 import {
   aiTurnGame,
   createGame,
@@ -10,6 +11,12 @@ import {
   type GameActionResult,
 } from '../../api/gamesApi';
 import { GameBoard } from '../../components/game-board/GameBoard';
+import { NewGameModal } from '../../components/new-game-modal/NewGameModal';
+import { createLogger } from '../../lib/logger';
+import { generatePlayerIdentities } from '../../lib/playerAvatars';
+import { playWinSound } from '../../lib/sound';
+
+const logger = createLogger('game-screen');
 
 interface AuthenticatedUser {
   id: string;
@@ -19,12 +26,38 @@ interface AuthenticatedUser {
 interface GameScreenProps {
   user: AuthenticatedUser;
   onSessionExpired: () => void;
+  onLogout: () => void;
 }
 
 const DEFAULT_TARGET_SCORE: number = 100;
-const TARGET_SCORE_MIN: number = 10;
-const TARGET_SCORE_MAX: number = 1000;
 const DEFAULT_AI_SEAT: 1 | 2 = 2; // the human plays seat 1 by default when starting an AI game
+
+// Pause before each automated AI move so it reads as "thinking" rather than instant —
+// the loading icon above the AI's "Player N" title (PlayerCard) is shown for this whole
+// window, not just the network round-trip.
+const AI_TURN_THINK_DELAY_MS: number = 900;
+
+// Shown behind the New Game modal before any game exists (requirement: the very first
+// load should read as "already on the game screen, New Game already open" — not a bare
+// modal floating over an empty page). Never sent to the server; the modal's overlay
+// (z-50, full-viewport) sits on top and makes it visually inert, exactly like reopening
+// New Game mid-game.
+const PLACEHOLDER_GAME: GameStateDto = {
+  id: '__placeholder__',
+  mode: 'human',
+  aiSeat: null,
+  targetScore: DEFAULT_TARGET_SCORE,
+  status: 'in_progress',
+  currentSeat: 1,
+  p1Score: 0,
+  p2Score: 0,
+  roundScore: 0,
+  lastDice: [],
+  winnerSeat: null,
+  version: 0,
+  lastMove: null,
+  busted: false,
+};
 
 function friendlyErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
@@ -33,20 +66,42 @@ function friendlyErrorMessage(error: unknown): string {
   return 'Something went wrong. Please try again.';
 }
 
-export function GameScreen({ user, onSessionExpired }: GameScreenProps) {
+export function GameScreen({ user, onSessionExpired, onLogout }: GameScreenProps) {
   const [game, setGame] = useState<GameStateDto | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [busy, setBusy] = useState<boolean>(false);
+  const [showNewGameModal, setShowNewGameModal] = useState<boolean>(false);
+  // True once the player has opened New Game from the in-game button at least once (as
+  // opposed to the automatic modal shown on login). From that point on, opening New Game
+  // must show the real board behind the modal instead of a reset-looking placeholder —
+  // only submitting the modal ("Let's Go!") may actually change game state; Cancel/X must
+  // return to exactly what was on screen before the click.
+  const [midGameReopen, setMidGameReopen] = useState<boolean>(false);
   const [targetScoreInput, setTargetScoreInput] = useState<number>(DEFAULT_TARGET_SCORE);
   const [modeInput, setModeInput] = useState<'human' | 'ai'>('human');
   const [aiSeatInput, setAiSeatInput] = useState<1 | 2>(DEFAULT_AI_SEAT);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
+  const [aiThinking, setAiThinking] = useState<boolean>(false);
+  const [wins, setWins] = useState<Record<1 | 2, number>>({ 1: 0, 2: 0 });
+  // Guards the win-count/sound effect below against double-counting the same finished
+  // game across re-renders (e.g. an unrelated state update re-running the effect).
+  const countedWinGameIdsRef = useRef<Set<string>>(new Set());
+  // Generated once per session (lazy initializer), not per game — the New Game modal must
+  // never reshuffle who "Player 1"/"Player 2" look like (bug report: editing the goal
+  // score was reshuffling avatars/names because they used to be regenerated per game.id).
+  const [identities] = useState(() => generatePlayerIdentities());
 
   useEffect(() => {
     listInProgressGames()
       .then((games) => {
-        setGame(games[0] ?? null);
+        const inProgressGame = games[0] ?? null;
+        setGame(inProgressGame);
+        // Every login/register opens the New Game modal (product requirement: never
+        // silently resume straight to an old game's scores). If an in-progress game exists
+        // it's still fetched and shown behind the modal — Cancel (available whenever a game
+        // exists, same as the mid-game "New Game" button) lets the player return to it.
+        setShowNewGameModal(true);
         setLoading(false);
       })
       .catch((error: unknown) => {
@@ -62,7 +117,7 @@ export function GameScreen({ user, onSessionExpired }: GameScreenProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function runAction(action: () => Promise<GameActionResult>): Promise<void> {
+  async function runAction(action: () => Promise<GameActionResult>): Promise<boolean> {
     setBusy(true);
     setErrorMessage(null);
     setInfoMessage(null);
@@ -72,10 +127,11 @@ export function GameScreen({ user, onSessionExpired }: GameScreenProps) {
       if (result.versionConflictRecovered) {
         setInfoMessage('The game moved on — showing the latest state. Try again.');
       }
+      return true;
     } catch (error) {
       if (error instanceof ApiError && error.errorCode === 'UNAUTHORIZED') {
         onSessionExpired();
-        return;
+        return false;
       }
       if (error instanceof ApiError && error.errorCode === 'GAME_ABANDONED') {
         // §8: a GAME_ABANDONED response shows a distinct notice and reloads the
@@ -84,36 +140,65 @@ export function GameScreen({ user, onSessionExpired }: GameScreenProps) {
         setErrorMessage('This game was abandoned. Loading your latest game…');
         try {
           const games = await listInProgressGames();
-          setGame(games[0] ?? null);
+          const inProgressGame = games[0] ?? null;
+          setGame(inProgressGame);
+          setShowNewGameModal(inProgressGame === null);
         } catch (reloadError) {
           setErrorMessage(friendlyErrorMessage(reloadError));
         }
-        return;
+        return false;
       }
       setErrorMessage(friendlyErrorMessage(error));
+      return false;
     } finally {
       setBusy(false);
     }
   }
 
-  // The AI seat plays itself (§9): whenever it becomes the AI's turn, call ai-turn once
-  // and let the resulting state change re-trigger this effect — it stops on its own once
-  // the seat passes (bust/hold), a forfeit hands the turn back, or the game ends. Gated
-  // on `busy` so it never overlaps a human action or a previous ai-turn call in flight.
+  // The AI seat plays itself (§9): whenever it becomes the AI's turn, wait
+  // AI_TURN_THINK_DELAY_MS (so the move reads as "thinking" rather than instant, and the
+  // loading icon on its PlayerCard has something to show), then call ai-turn once and let
+  // the resulting state change re-trigger this effect — it stops on its own once the seat
+  // passes (bust/hold), a forfeit hands the turn back, or the game ends. Gated on `busy` so
+  // it never overlaps a human action or a previous ai-turn call in flight, and on
+  // `showNewGameModal` so it can't keep auto-playing the game being replaced — without that
+  // gate, an ai-turn response could resolve after the New Game modal already created a new
+  // game and clobber it with the old game's state (bug report: selecting AI got "stuck"
+  // showing the previous game).
   useEffect(() => {
-    if (!game || busy) {
+    if (!game || busy || showNewGameModal) {
       return;
     }
     if (game.status !== 'in_progress' || game.mode !== 'ai' || game.currentSeat !== game.aiSeat) {
+      setAiThinking(false);
       return;
     }
-    void runAction(() => aiTurnGame(game.id, game.version));
+    setAiThinking(true);
+    const timeoutId: number = window.setTimeout(() => {
+      void runAction(() => aiTurnGame(game.id, game.version)).finally(() => setAiThinking(false));
+    }, AI_TURN_THINK_DELAY_MS);
+    return () => window.clearTimeout(timeoutId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [game, busy]);
+  }, [game, busy, showNewGameModal]);
 
-  async function handleCreate(event: FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault();
-    await runAction(async () => {
+  // Counts a win exactly once per finished game (guarded by countedWinGameIdsRef, since
+  // `game` changes reference on every action and would otherwise re-fire this effect for
+  // the same already-finished game) and plays the victory chime alongside it.
+  useEffect(() => {
+    if (!game || game.status !== 'finished' || game.winnerSeat === null) {
+      return;
+    }
+    if (countedWinGameIdsRef.current.has(game.id)) {
+      return;
+    }
+    countedWinGameIdsRef.current.add(game.id);
+    const winnerSeat: 1 | 2 = game.winnerSeat;
+    setWins((current) => ({ ...current, [winnerSeat]: current[winnerSeat] + 1 }));
+    playWinSound();
+  }, [game]);
+
+  async function handleCreate(): Promise<void> {
+    const succeeded = await runAction(async () => {
       const input: CreateGameInput =
         modeInput === 'ai'
           ? { targetScore: targetScoreInput, mode: 'ai', aiSeat: aiSeatInput }
@@ -121,6 +206,9 @@ export function GameScreen({ user, onSessionExpired }: GameScreenProps) {
       const state = await createGame(input);
       return { state, versionConflictRecovered: false };
     });
+    if (succeeded) {
+      setShowNewGameModal(false);
+    }
   }
 
   async function handleRoll(): Promise<void> {
@@ -137,96 +225,90 @@ export function GameScreen({ user, onSessionExpired }: GameScreenProps) {
     await runAction(() => holdGame(game.id, game.version));
   }
 
+  // The server-side session cookie is httpOnly and cleared by /auth/logout — if that call
+  // fails (e.g. the session already expired), the user still expects the click to leave
+  // them logged out locally, so onLogout runs in `finally` rather than only on success.
+  async function handleLogout(): Promise<void> {
+    try {
+      await logout();
+    } catch (error) {
+      logger.warn('Logout request failed; clearing local session anyway', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      onLogout();
+    }
+  }
+
   if (loading) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-100">
+      <main className="flex min-h-screen items-center justify-center bg-background text-foreground">
         <p>Loading…</p>
       </main>
     );
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-950 p-8 text-slate-100">
-      <p className="text-sm text-slate-400">Signed in as {user.username}</p>
+    <main className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background p-4 text-foreground sm:p-6">
+      <div className="fixed top-4 left-4 z-40">
+        <p className="flex items-center gap-2 text-sm text-muted-foreground">
+          <button
+            type="button"
+            onClick={() => void handleLogout()}
+            className="cursor-pointer underline decoration-dotted underline-offset-4 hover:text-foreground"
+          >
+            Logout
+          </button>
+          <span aria-hidden="true">|</span>
+          <span>Signed in as {user.username}</span>
+        </p>
+      </div>
 
       {errorMessage && (
-        <p role="alert" className="text-sm text-red-400">
+        <p role="alert" className="text-sm text-danger">
           {errorMessage}
         </p>
       )}
-      {infoMessage && <p className="text-sm text-amber-400">{infoMessage}</p>}
+      {infoMessage && <p className="text-sm text-warning">{infoMessage}</p>}
 
-      {game ? (
-        <>
-          <GameBoard
-            game={game}
-            onRoll={() => void handleRoll()}
-            onHold={() => void handleHold()}
-            busy={busy}
-          />
-          {/* Assignment requirement: a player can start a new game at any time —
-              submitting the form below re-runs createGame, which abandons this game
-              server-side (M3b abandon+create) before creating the new one. */}
-          <button
-            type="button"
-            onClick={() => setGame(null)}
-            className="text-sm text-slate-400 underline"
-          >
-            Start a new game
-          </button>
-        </>
-      ) : (
-        <form
-          onSubmit={(event) => {
-            void handleCreate(event);
-          }}
-          className="flex w-full max-w-sm flex-col gap-4 rounded-lg bg-slate-900 p-8"
-        >
-          <h1 className="text-xl font-semibold">Start a new game</h1>
-          <label className="flex flex-col gap-1 text-sm">
-            Target score
-            <input
-              type="number"
-              value={targetScoreInput}
-              onChange={(event) => setTargetScoreInput(Number(event.target.value))}
-              min={TARGET_SCORE_MIN}
-              max={TARGET_SCORE_MAX}
-              required
-              className="rounded border border-slate-700 bg-slate-800 px-3 py-2"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            Opponent
-            <select
-              value={modeInput}
-              onChange={(event) => setModeInput(event.target.value === 'ai' ? 'ai' : 'human')}
-              className="rounded border border-slate-700 bg-slate-800 px-3 py-2"
-            >
-              <option value="human">Human (play both seats)</option>
-              <option value="ai">AI</option>
-            </select>
-          </label>
-          {modeInput === 'ai' && (
-            <label className="flex flex-col gap-1 text-sm">
-              AI plays seat
-              <select
-                value={aiSeatInput}
-                onChange={(event) => setAiSeatInput(event.target.value === '2' ? 2 : 1)}
-                className="rounded border border-slate-700 bg-slate-800 px-3 py-2"
-              >
-                <option value={1}>Player 1</option>
-                <option value={2}>Player 2</option>
-              </select>
-            </label>
-          )}
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded bg-indigo-600 px-3 py-2 font-medium disabled:opacity-50"
-          >
-            Start Game
-          </button>
-        </form>
+      {/* Assignment requirement: a player can start a new game at any time — GameBoard's
+          New Game button opens the modal below instead of navigating to a separate
+          screen; submitting it re-runs createGame, which abandons this game server-side
+          (M3b abandon+create) before creating the new one. Renders even with no real game
+          yet (PLACEHOLDER_GAME) so the New Game modal always opens over a board, never a
+          bare page. The automatic login-time modal still shows PLACEHOLDER_GAME (0/0)
+          behind it — even over an existing in-progress game — so the player never sees a
+          previous game's scores before choosing to resume it. Once the player has opened
+          New Game from the in-game button (midGameReopen), the real board stays visible
+          and unchanged behind the modal instead: opening/cancelling New Game must never
+          look like a reset — only submitting it ("Let's Go!") actually changes state. */}
+      <GameBoard
+        key={game?.id ?? 'placeholder'}
+        game={showNewGameModal && !midGameReopen ? PLACEHOLDER_GAME : (game ?? PLACEHOLDER_GAME)}
+        identities={identities}
+        wins={wins}
+        onRoll={() => void handleRoll()}
+        onHold={() => void handleHold()}
+        onNewGame={() => {
+          setMidGameReopen(true);
+          setShowNewGameModal(true);
+        }}
+        busy={busy}
+        aiThinking={aiThinking}
+      />
+
+      {showNewGameModal && (
+        <NewGameModal
+          targetScore={targetScoreInput}
+          mode={modeInput}
+          aiSeat={aiSeatInput}
+          onTargetScoreChange={setTargetScoreInput}
+          onModeChange={setModeInput}
+          onAiSeatChange={setAiSeatInput}
+          onSubmit={() => void handleCreate()}
+          onCancel={game ? () => setShowNewGameModal(false) : null}
+          busy={busy}
+        />
       )}
     </main>
   );

@@ -1,0 +1,44 @@
+/* Full-viewport confetti overlay (see Confetti.tsx). Uses a single shared keyframe with
+   per-piece randomization passed in via inline style + the --confetti-drift/-rotation
+   custom properties, rather than the reference's per-element generated keyframes
+   (confety.txt) — same visual effect, far less CSS. */
+
+.confetti-layer {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 50;
+}
+
+/* `infinite` is what makes the effect never-ending on its own — each piece falls, snaps
+   back to the top, and falls again forever, with no JS regeneration needed. The
+   negative per-piece animation-delay (Confetti.tsx) staggers where each piece starts
+   in that loop, so the initial render already looks like an ongoing rain. */
+.confetti-piece {
+  position: absolute;
+  top: -5%;
+  opacity: 0.95;
+  animation-name: confetti-fall;
+  animation-timing-function: ease-in;
+  animation-iteration-count: infinite;
+}
+
+.confetti-shred {
+  border-radius: 1px;
+}
+
+.confetti-icon {
+  line-height: 1;
+}
+
+@keyframes confetti-fall {
+  0% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--confetti-drift), 110vh, 0) rotate(var(--confetti-rotation));
+    opacity: 0.35;
+  }
+}

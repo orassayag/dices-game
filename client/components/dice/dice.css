@@ -1,0 +1,122 @@
+/* Real 3D dice, adapted from dices-ref.txt: a cube built from 6 absolutely-positioned
+   faces, rotated per face and rolled into place per value via fixed rotateX/rotateY
+   transforms (see FACE_TRANSFORMS in Dice.tsx). --dice-size is the one token every
+   measurement below derives from, so the cube can be resized in one place. */
+
+:root {
+  --dice-size: clamp(4.5rem, 7.5vw, 7rem);
+  /* A real die is white with black pips regardless of app theme — every face uses the
+     same flat white so no face ever reads as gray, on any screen. */
+  --dice-face-color: #ffffff;
+  --dice-pip-color: #1a1a1a;
+}
+
+.dice-scene {
+  position: relative;
+  width: var(--dice-size);
+  height: var(--dice-size);
+  perspective: calc(var(--dice-size) * 4);
+}
+
+.dice-cube {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--dice-size);
+  height: var(--dice-size);
+  margin-top: calc(var(--dice-size) / -2);
+  margin-left: calc(var(--dice-size) / -2);
+  transform-style: preserve-3d;
+  transform-origin: center center calc(var(--dice-size) / -2);
+  /* Must match gameBoard.css's round-score-pop animation-duration (380ms) — the settle
+     rotation and the round-score pop-in are triggered by the same "rolling just stopped"
+     moment and must land at the same time, so the new number appears exactly as the dice
+     settle onto their final face. */
+  transition: transform 380ms ease-out;
+}
+
+.dice-cube[data-rolling] {
+  transition-timing-function: linear;
+}
+
+.dice-face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  grid-template-areas:
+    'tl tm tr'
+    'ml mm mr'
+    'bl bm br';
+  padding: 14%;
+  gap: 6%;
+  border-radius: 12%;
+  box-shadow: inset 0 0 calc(var(--dice-size) * 0.08) calc(var(--dice-size) * -0.04) rgba(0, 0, 0, 0.6);
+}
+
+.dice-face-1 {
+  background: var(--dice-face-color);
+  transform: rotateY(180deg);
+}
+.dice-face-2 {
+  background: var(--dice-face-color);
+  transform-origin: left center;
+  transform: rotateY(-90deg);
+}
+.dice-face-3 {
+  background: var(--dice-face-color);
+  transform-origin: top center;
+  transform: rotateX(90deg);
+}
+.dice-face-4 {
+  background: var(--dice-face-color);
+  transform-origin: bottom center;
+  transform: rotateX(-90deg);
+}
+.dice-face-5 {
+  background: var(--dice-face-color);
+  transform-origin: right center;
+  transform: rotateY(90deg);
+}
+.dice-face-6 {
+  background: var(--dice-face-color);
+  transform: translateZ(var(--dice-size));
+}
+
+.dice-pip {
+  width: calc(var(--dice-size) * 0.16);
+  height: calc(var(--dice-size) * 0.16);
+  border-radius: 50%;
+  background: var(--dice-pip-color);
+  align-self: center;
+  justify-self: center;
+}
+
+.dice-pip-tl {
+  grid-area: tl;
+}
+.dice-pip-tm {
+  grid-area: tm;
+}
+.dice-pip-tr {
+  grid-area: tr;
+}
+.dice-pip-ml {
+  grid-area: ml;
+}
+.dice-pip-mm {
+  grid-area: mm;
+}
+.dice-pip-mr {
+  grid-area: mr;
+}
+.dice-pip-bl {
+  grid-area: bl;
+}
+.dice-pip-bm {
+  grid-area: bm;
+}
+.dice-pip-br {
+  grid-area: br;
+}

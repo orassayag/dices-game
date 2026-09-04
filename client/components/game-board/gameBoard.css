@@ -1,0 +1,24 @@
+/* Round-score pop: the value snaps into view whenever the dice finish rolling, so a
+   scoring (or busting) roll reads as an event even though the number is static once
+   landed. GameBoard remounts this element via a changing `key` each time rolling stops,
+   which is what replays the animation instead of it only firing once on first mount. */
+
+@keyframes round-score-pop {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.3;
+  }
+  60% {
+    transform: scale(1.18);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.round-score-value {
+  display: inline-block;
+  animation: round-score-pop 380ms ease-out;
+}

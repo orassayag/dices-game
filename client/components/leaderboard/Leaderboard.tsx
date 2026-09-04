@@ -1,0 +1,65 @@
+import { Trophy } from 'lucide-react';
+
+// Each row is absolutely positioned and slid to its rank via translateY — must match the
+// row's actual rendered height (padding + line height) or rows would overlap/gap on reorder.
+const LEADERBOARD_ROW_HEIGHT_PX: number = 44;
+const LEADERBOARD_REORDER_TRANSITION_MS: number = 500;
+
+interface LeaderboardEntry {
+  seatNumber: 1 | 2;
+  name: string;
+  wins: number;
+}
+
+interface LeaderboardProps {
+  seat1: LeaderboardEntry;
+  seat2: LeaderboardEntry;
+}
+
+/** Fixed top-left win-count table for the two players. Ranks by win count (ties keep seat
+ * 1 above seat 2, via `Array#sort`'s stability) and animates a row sliding to its new rank
+ * via a `translateY` transition — rows stay mounted across a reorder instead of being
+ * remounted in new DOM positions, which is what makes the position swap animate. */
+export function Leaderboard({ seat1, seat2 }: LeaderboardProps) {
+  const entries: LeaderboardEntry[] = [seat1, seat2];
+  const ranked: LeaderboardEntry[] = [...entries].sort((a, b) => b.wins - a.wins);
+
+  return (
+    <div className="w-48 rounded-xl border border-border bg-surface/95 shadow-sm sm:w-56">
+      <p className="border-b border-border px-3 py-1.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+        Leaderboard
+      </p>
+      <div className="relative" style={{ height: LEADERBOARD_ROW_HEIGHT_PX * entries.length }}>
+        {entries.map((entry) => {
+          const rank: number = ranked.findIndex(
+            (rankedEntry) => rankedEntry.seatNumber === entry.seatNumber,
+          );
+          return (
+            <div
+              key={entry.seatNumber}
+              className="absolute inset-x-0 flex items-center gap-2 px-3 transition-transform ease-out"
+              style={{
+                height: LEADERBOARD_ROW_HEIGHT_PX,
+                transform: `translateY(${rank * LEADERBOARD_ROW_HEIGHT_PX}px)`,
+                transitionDuration: `${LEADERBOARD_REORDER_TRANSITION_MS}ms`,
+              }}
+            >
+              {rank === 0 ? (
+                <Trophy size={16} aria-hidden="true" className="shrink-0 text-warning" />
+              ) : (
+                <span
+                  aria-hidden="true"
+                  className="w-4 shrink-0 text-center text-xs text-muted-foreground"
+                >
+                  {rank + 1}
+                </span>
+              )}
+              <span className="flex-1 truncate text-sm font-medium">{entry.name}</span>
+              <span className="text-sm font-bold text-accent">{entry.wins}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,15 @@
+/* Winner celebration: the avatar completes one full rotation every 10 seconds, looping
+   for as long as the game stays in the finished/won state. */
+
+@keyframes winner-avatar-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.winner-avatar {
+  animation: winner-avatar-spin 10s linear infinite;
+}

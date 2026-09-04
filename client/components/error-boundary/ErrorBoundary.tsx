@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { createLogger } from '../../lib/logger';
+import { Button } from '../button/Button';
 
 const logger = createLogger('error-boundary');
 
@@ -37,20 +38,14 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   public render(): ReactNode {
     if (this.state.error) {
       return (
-        <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-950 p-8 text-slate-100">
-          <p role="alert" className="text-lg font-semibold text-red-400">
+        <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background p-8 text-foreground">
+          <p role="alert" className="text-lg font-semibold text-danger">
             Something went wrong.
           </p>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-muted-foreground">
             The game screen ran into an unexpected error. You can try again below.
           </p>
-          <button
-            type="button"
-            onClick={this.handleRetry}
-            className="rounded bg-indigo-600 px-4 py-2 font-medium"
-          >
-            Try again
-          </button>
+          <Button onClick={this.handleRetry}>Try again</Button>
         </main>
       );
     }

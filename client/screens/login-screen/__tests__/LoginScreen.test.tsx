@@ -45,7 +45,7 @@ describe('LoginScreen', () => {
     render(<LoginScreen onAuthenticated={vi.fn()} />);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Log in' })).toBeEnabled());
 
-    await user.click(screen.getByRole('button', { name: 'Need an account? Register' }));
+    await user.click(screen.getByRole('button', { name: 'Sign In' }));
     await user.type(screen.getByLabelText('Username'), 'bob');
     await user.type(screen.getByLabelText('Password'), 'password123');
     await user.click(screen.getByRole('button', { name: 'Register' }));

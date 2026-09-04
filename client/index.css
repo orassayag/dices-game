@@ -1,1 +1,111 @@
 @import 'tailwindcss';
+
+:root {
+  /* Screen-relative game panel size — defined once here so GameBoard/GameScreen
+     reference the token instead of a literal. Tall enough that the winner banner + both
+     "Winner!" lines never push content past the panel's overflow-hidden edge — the panel
+     must never show a scrollbar (GameBoard.tsx clips instead of scrolling). */
+  --game-panel-width: 66vw;
+  --game-panel-height: 92vh;
+  /* The login/register card is intentionally narrower than the game panel — a fixed cap
+     (not viewport-relative like the game panel) reads as a compact auth card on every
+     screen size instead of stretching wide on large monitors. */
+  --login-panel-width: min(90vw, 28rem);
+}
+
+/* Design tokens (Tailwind v4 CSS-first theme). Every color used anywhere in the app must
+   go through one of these `--color-*` variables — never a raw hex/utility color at the
+   point of use — so day/night mode is a single cascade override, not a per-component
+   edit. Light values live here; `.dark` below overrides the same variable names, and
+   every `bg-*`/`text-*`/`border-*` utility Tailwind generates from them follows the
+   override automatically because the utility itself compiles to `var(--color-*)`. */
+@theme {
+  --color-background: #f3f4f8;
+  --color-surface: #ffffff;
+  --color-surface-alt: #eceef4;
+  --color-surface-alt-hover: #e0e3ec;
+  --color-border: #d7dae3;
+  --color-foreground: #1c1f27;
+  --color-muted-foreground: #656b7a;
+
+  --color-accent: #d9761f;
+  --color-accent-hover: #b8621a;
+  --color-accent-foreground: #fffaf3;
+
+  --color-success: #1f9d55;
+  --color-success-bg: #e3f8ea;
+  --color-success-foreground: #14532d;
+
+  --color-danger: #d63b3b;
+  --color-danger-bg: #fbe7e7;
+  --color-danger-foreground: #7f1d1d;
+
+  --color-warning: #b8860b;
+  --color-warning-bg: #faf1d8;
+  --color-warning-foreground: #6b5300;
+}
+
+.dark {
+  --color-background: #0c0e14;
+  --color-surface: #161922;
+  --color-surface-alt: #1f232f;
+  --color-surface-alt-hover: #2a2f3d;
+  --color-border: #2c3141;
+  --color-foreground: #eceef3;
+  --color-muted-foreground: #949bad;
+
+  --color-accent: #e2903f;
+  --color-accent-hover: #f0a75c;
+  --color-accent-foreground: #241503;
+
+  --color-success: #3fc774;
+  --color-success-bg: #0e2c1b;
+  --color-success-foreground: #86efac;
+
+  --color-danger: #f0605c;
+  --color-danger-bg: #3a1414;
+  --color-danger-foreground: #fca5a5;
+
+  --color-warning: #e0b23c;
+  --color-warning-bg: #3a2f0c;
+  --color-warning-foreground: #fde68a;
+}
+
+body {
+  background-color: var(--color-background);
+  color-scheme: light;
+}
+
+/* `.dark` is toggled on <html> (see client/lib/theme.ts); color custom properties
+   inherit down through body/panels automatically, this only needs to flip
+   `color-scheme` so native form controls (scrollbars, checkboxes) theme too. */
+.dark {
+  color-scheme: dark;
+}
+
+/* Plays once per failed validation attempt on a form field (LoginScreen) — the caller
+   remounts the input via a changing `key` each time, the same replay-on-remount pattern
+   GameBoard uses for its round-score pop. */
+@keyframes field-shake {
+  10%,
+  90% {
+    transform: translateX(-1px);
+  }
+  20%,
+  80% {
+    transform: translateX(2px);
+  }
+  30%,
+  50%,
+  70% {
+    transform: translateX(-4px);
+  }
+  40%,
+  60% {
+    transform: translateX(4px);
+  }
+}
+
+.field-shake {
+  animation: field-shake 400ms ease-in-out;
+}
