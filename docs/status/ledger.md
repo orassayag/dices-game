@@ -244,3 +244,9 @@ data refetch). No dedicated `App.test.tsx` — the one-line `ErrorBoundary` wrap
 branching logic of its own; both sides of the composition are already covered by
 `ErrorBoundary.test.tsx` and `GameScreen.test.tsx`.
 **User overrides during review:** None recorded.
+
+## Stage 9 — AI opponent core: provider adapter, heuristic fallback, deadline race, single-flight+semaphore (M5a, I2) (committed 2026-09-04)
+**Files:** server/services/ai/aiTypes.ts, server/services/ai/heuristicProvider.ts, server/services/ai/resolveAiDecision.ts, server/services/ai/aiTurnConcurrency.ts, server/services/ai/__tests__/heuristicProvider.test.ts, server/services/ai/__tests__/resolveAiDecision.test.ts, server/services/ai/__tests__/aiTurnConcurrency.test.ts
+**What was built:** AiDecisionProvider adapter contract + AiDecisionSchema; HeuristicProvider (mandatory deterministic fallback, no API key required); resolveAiDecision (Promise.race deadline of AI_DEADLINE_MS=3000ms + AbortSignal.timeout, output validation, onProviderSettled hook); claimAiTurn/releaseAiTurnClaim single-flight lock + AiProviderSemaphore bounded concurrency (I2), both released only on real provider settlement.
+**Key decisions:** Heuristic-only for this project per explicit developer choice (plan's Open Questions item) — provider param is nullable so a real LLM adapter drops in later with no engine/route changes. onProviderSettled hook over exposing two promises. safeParse over parse+try/catch. legalActions always ['roll','hold']. Full DB-integration AI tests (aiBoundary, ai, aiSingleFlight, aiHungLeak, aiCap) deferred to stage 10 (M5b) since they need the route/transaction/aiMoveCount.
+**User overrides during review:** None.

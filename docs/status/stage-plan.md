@@ -35,5 +35,5 @@ the hard per-stage ceilings (10 files / 300 lines-per-file).
 - Stage 6: COMMITTED — Game hardening: concurrency, abandon+create, win increment, DB error mapping, gameplay rate limit (M3b)
 - Stage 7: COMMITTED — Frontend core: apiClient, LoginScreen, GameScreen, resume, guarded board (M4a)
 - Stage 8: COMMITTED — Frontend polish: 6&6 bust animation, error boundary, winner highlight, abandoned/finished notice (M4b)
-- Stage 9: PLANNED — AI opponent core: provider adapter, heuristic fallback, deadline race, single-flight+semaphore (M5a, I2)
+- Stage 9: COMMITTED — AI opponent core: provider adapter, heuristic fallback, deadline race, single-flight+semaphore (M5a, I2)
 - Stage 10: PLANNED — AI opponent integration: ai-turn route, aiMoveCount cap+forfeit, frontend AI loop (M5b, I1/I4)
