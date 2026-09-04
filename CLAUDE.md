@@ -102,8 +102,8 @@ pnpm run build            # prisma generate + build client + full type-check
 pnpm run start            # Run production server (serves built client + API)
 pnpm run type-check       # Type-check (alias of typecheck)
 pnpm run lint             # Lint all files
-pnpm run test             # Run all tests once (both Vitest projects: web + api)
-pnpm run test:coverage    # Run tests with coverage (60/60/50 thresholds)
+pnpm run test             # Run all tests once (both Vitest projects: web + api), with an Istanbul coverage table printed for every file (60/60/50 thresholds)
+pnpm run test:coverage    # Same as `pnpm run test` — kept as an explicit alias
 ```
 
 ---

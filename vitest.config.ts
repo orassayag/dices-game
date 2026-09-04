@@ -7,10 +7,11 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   test: {
     coverage: {
-      provider: 'v8',
+      provider: 'istanbul',
       include: ['server/**/*.ts', 'shared/**/*.ts', 'client/**/*.{ts,tsx}'],
       exclude: ['**/__tests__/**', '**/prisma/migrations/**'],
       thresholds: { lines: 60, functions: 60, branches: 50 },
+      reporter: ['text'],
     },
     // Root-level, not per-project: fileParallelism is one of the options Vitest
     // resolves globally (see its own CLI-overrides list), so setting it only inside
