@@ -24,6 +24,11 @@ interface FieldErrors {
 
 const USERNAME_MIN_LENGTH: number = 3;
 const PASSWORD_MIN_LENGTH: number = 8;
+// Style requirement (§5): a new password must mix letters and digits, not just meet a
+// length floor — checked only on Sign In (registration); an existing account's password
+// was never required to match this, so re-checking it on Login could lock someone out.
+const PASSWORD_STYLE_REGEX: RegExp = /^(?=.*[A-Za-z])(?=.*\d)/;
+const PASSWORD_HINT_TEXT: string = `At least ${PASSWORD_MIN_LENGTH} characters, with a letter and a number.`;
 
 // Register is presented as "Sign In" and login as "Login" (§2) — the show-password
 // toggle only makes sense while typing a brand-new password to double-check it (§3), so
@@ -81,6 +86,8 @@ export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
       errors.password = 'Password is required.';
     } else if (password.length < PASSWORD_MIN_LENGTH) {
       errors.password = `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`;
+    } else if (mode === 'register' && !PASSWORD_STYLE_REGEX.test(password)) {
+      errors.password = 'Password must contain at least one letter and one number.';
     }
     setFieldErrors(errors);
     if (errors.username) {
@@ -122,12 +129,14 @@ export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
     <main className="flex min-h-screen flex-col items-center justify-center gap-6 bg-background p-4 text-foreground">
       <div className="flex flex-col items-center gap-3">
         <div className="flex items-center gap-3">
-          <img
-            src="/roeto_logo.jpeg"
-            alt="Roeto logo"
-            className="size-10 rounded-full object-cover sm:size-12"
-          />
-          <h1 className="text-2xl font-bold sm:text-3xl">Roeto Dice Game</h1>
+          <a href="https://roeto.co.il/" target="_blank" rel="noopener noreferrer" aria-label="Visit Roeto's website">
+            <img
+              src="/roeto_logo.jpeg"
+              alt="Roeto logo"
+              className="size-10 rounded-full object-cover sm:size-12"
+            />
+          </a>
+          <h1 className="text-2xl font-bold sm:text-3xl">Roeto Dices Game</h1>
         </div>
         <AutoDicePair />
       </div>
@@ -166,40 +175,45 @@ export function LoginScreen({ onAuthenticated }: LoginScreenProps) {
           )}
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="relative min-w-0 flex-1">
-            <input
-              key={passwordShakeKey}
-              type={showPassword ? 'text' : 'password'}
-              autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
-              spellCheck={false}
-              aria-label="Password"
-              aria-invalid={Boolean(fieldErrors.password)}
-              placeholder="Password"
-              value={password}
-              onChange={(event) => {
-                setPassword(event.target.value);
-                clearFieldError('password');
-              }}
-              className={`w-full rounded-lg border px-3 py-2 placeholder:text-muted-foreground ${
-                mode === 'register' ? 'pr-10' : ''
-              } ${fieldErrors.password ? 'field-shake border-danger' : 'border-border bg-surface-alt'}`}
-            />
-            {mode === 'register' && (
-              <button
-                type="button"
-                onClick={() => setShowPassword((previous) => !previous)}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-                className="absolute inset-y-0 right-2 flex cursor-pointer items-center text-muted-foreground hover:text-foreground"
-              >
-                {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
-              </button>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <div className="relative min-w-0 flex-1">
+              <input
+                key={passwordShakeKey}
+                type={showPassword ? 'text' : 'password'}
+                autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+                spellCheck={false}
+                aria-label="Password"
+                aria-invalid={Boolean(fieldErrors.password)}
+                placeholder="Password"
+                value={password}
+                onChange={(event) => {
+                  setPassword(event.target.value);
+                  clearFieldError('password');
+                }}
+                className={`w-full rounded-lg border px-3 py-2 placeholder:text-muted-foreground ${
+                  mode === 'register' ? 'pr-10' : ''
+                } ${fieldErrors.password ? 'field-shake border-danger' : 'border-border bg-surface-alt'}`}
+              />
+              {mode === 'register' && (
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((previous) => !previous)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  className="absolute inset-y-0 right-2 flex cursor-pointer items-center text-muted-foreground hover:text-foreground"
+                >
+                  {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
+                </button>
+              )}
+            </div>
+            {fieldErrors.password && (
+              <span role="alert" className="shrink-0 text-xs font-medium text-danger">
+                {fieldErrors.password}
+              </span>
             )}
           </div>
-          {fieldErrors.password && (
-            <span role="alert" className="shrink-0 text-xs font-medium text-danger">
-              {fieldErrors.password}
-            </span>
+          {mode === 'register' && !fieldErrors.password && (
+            <p className="text-xs text-muted-foreground">{PASSWORD_HINT_TEXT}</p>
           )}
         </div>
 

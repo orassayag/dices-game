@@ -23,6 +23,17 @@ export async function login(credentials: AuthCredentialsInput): Promise<AuthResp
   return AuthResponseSchema.parse(body);
 }
 
+/**
+ * Restores the session from the HttpOnly auth cookie alone (bug fix: a page reload was
+ * logging the user out because the app never checked for an existing session). Rejects
+ * with an `ApiError('UNAUTHORIZED', ...)` when there is no valid session — the caller
+ * treats that as "not logged in", not as an error to surface.
+ */
+export async function getCurrentUser(): Promise<AuthResponse> {
+  const body = await apiRequest('/auth/me', { method: 'GET' });
+  return AuthResponseSchema.parse(body);
+}
+
 export async function logout(): Promise<void> {
   await apiRequest('/auth/logout', { method: 'POST' });
 }

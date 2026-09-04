@@ -87,3 +87,15 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     next(error);
   }
 }
+
+// requireAuth (above) always sets `req.userId` before any downstream handler runs on a
+// protected route; this guard only protects against a future reordering mistake, not a
+// real user path. Shared by every router mounted behind requireAuth (games, auth's own
+// GET /me) rather than each defining its own copy.
+export function requireUserId(req: Request): string {
+  const userId = req.userId;
+  if (!userId) {
+    throw new Error('NO_USER_ID_ON_REQUEST — requireAuth must run before this handler.');
+  }
+  return userId;
+}

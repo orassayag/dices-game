@@ -260,7 +260,7 @@ export function GameScreen({ user, onSessionExpired, onLogout }: GameScreenProps
             Logout
           </button>
           <span aria-hidden="true">|</span>
-          <span>Signed in as {user.username}</span>
+          <span>{user.username}</span>
         </p>
       </div>
 

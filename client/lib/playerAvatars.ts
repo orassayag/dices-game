@@ -43,6 +43,17 @@ const PRAVATAR_IMAGE_IDS: number[] = Array.from(
 
 const FALLBACK_AVATAR_BACKGROUND_COLOR: string = '#6b7280';
 
+// §4: the AI opponent always shows this fixed identity, never a random human one — the
+// CSP img-src allowlist (server/app.ts) must include this host or the browser blocks it.
+export const AI_PLAYER_NAME: string = 'AI Dices BOT';
+export const AI_PLAYER_AVATAR_URL: string =
+  'https://img.magnific.com/free-vector/chatbot-chat-message-vectorart_78370-4104.jpg';
+
+export interface SeatDisplay {
+  name: string;
+  avatarSrc: string;
+}
+
 function pickTwoDistinct<T>(items: T[]): [T, T] {
   const shuffled = [...items].sort(() => Math.random() - 0.5);
   const first = shuffled[0];
@@ -68,6 +79,18 @@ export function fallbackAvatarUrl(name: string): string {
     <text x="50" y="53" text-anchor="middle" dominant-baseline="middle" font-family="system-ui, sans-serif" font-size="44" font-weight="700" fill="#ffffff">${initial}</text>
   </svg>`;
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+/** Resolves what a seat actually shows: the fixed AI bot identity while that seat is
+ * played by the AI, otherwise the seat's own human identity. `identity` is never mutated
+ * when a seat becomes/stops being AI (GameScreen generates it once per session), so
+ * switching a New Game's opponent back to "Human" shows the exact same player as before
+ * with no separate "restore" step needed. */
+export function resolveSeatDisplay(identity: PlayerIdentity, isAiSeat: boolean): SeatDisplay {
+  if (isAiSeat) {
+    return { name: AI_PLAYER_NAME, avatarSrc: AI_PLAYER_AVATAR_URL };
+  }
+  return { name: identity.name, avatarSrc: avatarUrl(identity.avatarImageId) };
 }
 
 /** Random name + random avatar photo per seat, generated once per browser session (see

@@ -23,6 +23,9 @@ interface LeaderboardProps {
 export function Leaderboard({ seat1, seat2 }: LeaderboardProps) {
   const entries: LeaderboardEntry[] = [seat1, seat2];
   const ranked: LeaderboardEntry[] = [...entries].sort((a, b) => b.wins - a.wins);
+  // A tied lead has no single leader to crown — showing the crown on one of two equal
+  // scores would misrepresent the standings.
+  const isTiedLead: boolean = seat1.wins === seat2.wins;
 
   return (
     <div className="w-48 rounded-xl border border-border bg-surface/95 shadow-sm sm:w-56">
@@ -44,17 +47,18 @@ export function Leaderboard({ seat1, seat2 }: LeaderboardProps) {
                 transitionDuration: `${LEADERBOARD_REORDER_TRANSITION_MS}ms`,
               }}
             >
-              {rank === 0 ? (
-                <Trophy size={16} aria-hidden="true" className="shrink-0 text-warning" />
-              ) : (
-                <span
-                  aria-hidden="true"
-                  className="w-4 shrink-0 text-center text-xs text-muted-foreground"
-                >
-                  {rank + 1}
-                </span>
-              )}
-              <span className="flex-1 truncate text-sm font-medium">{entry.name}</span>
+              <span
+                aria-hidden="true"
+                className="w-4 shrink-0 text-center text-xs text-muted-foreground"
+              >
+                {rank + 1}
+              </span>
+              <span className="flex flex-1 items-center gap-1 truncate text-sm font-medium">
+                <span className="truncate">{entry.name}</span>
+                {rank === 0 && !isTiedLead && (
+                  <Trophy size={14} aria-hidden="true" className="shrink-0 text-warning" />
+                )}
+              </span>
               <span className="text-sm font-bold text-accent">{entry.wins}</span>
             </div>
           );

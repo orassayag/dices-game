@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../../app.js';
 import { truncateAll } from '../../__tests__/helpers/testDb.js';
 import * as authCrypto from '../../lib/authCrypto.js';
+import { authedGet, registerTestUser } from '../../__tests__/helpers/authedSession.js';
 import {
   extractSetCookieHeaders,
   fetchPreAuthCsrf,
@@ -124,6 +125,28 @@ describe('POST /auth/logout', () => {
     const app = createApp();
     const csrf = await fetchPreAuthCsrf(app);
     const response = await withCsrfHeaders(request(app).post('/auth/logout'), csrf);
+    expect(response.status).toBe(401);
+  });
+});
+
+describe('GET /auth/me', () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  it('should return the current user for a valid auth cookie (remember-me on reload)', async () => {
+    const app = createApp();
+    const session = await registerTestUser(app, 'alice');
+
+    const response = await authedGet(app, '/auth/me', session);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ user: { id: session.userId, username: 'alice' } });
+  });
+
+  it('should reject with 401 when there is no auth cookie', async () => {
+    const app = createApp();
+    const response = await request(app).get('/auth/me');
     expect(response.status).toBe(401);
   });
 });

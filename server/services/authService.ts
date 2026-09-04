@@ -63,3 +63,21 @@ export async function loginUser(username: string, password: string): Promise<Aut
     authToken: signAuthToken({ sub: user.id, tokenVersion: user.tokenVersion }),
   };
 }
+
+// Backs GET /auth/me (the "remember me after reload" fix): requireAuth already proved
+// the cookie's tokenVersion is current, but it never looked up the username — this is
+// the read that lets the client restore { id, username } from a still-valid session
+// cookie alone, without persisting anything itself. UNAUTHORIZED (not a 404) matches how
+// requireAuth treats a deleted account for a token that's technically still valid.
+export async function getAuthenticatedUser(
+  userId: string,
+): Promise<{ id: string; username: string }> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, username: true },
+  });
+  if (!user) {
+    throw new UnauthorizedError('Session user no longer exists.', { errorCode: 'UNAUTHORIZED' });
+  }
+  return user;
+}

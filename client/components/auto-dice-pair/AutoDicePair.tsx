@@ -10,6 +10,11 @@ const MIN_ROLL_GAP_MS: number = 10_000;
 const MAX_ROLL_GAP_MS: number = 16_000;
 const ROLL_ANIMATION_MS: number = 650;
 
+// The very first roll uses its own, much shorter window — the page should feel alive
+// almost immediately on login, not wait out a full steady-state gap before anything moves.
+const INITIAL_ROLL_MIN_DELAY_MS: number = 1_500;
+const INITIAL_ROLL_MAX_DELAY_MS: number = 2_500;
+
 function randomDiceValue(excludeValue: DiceValue): DiceValue {
   let nextValue: DiceValue;
   do {
@@ -22,10 +27,15 @@ function randomGapMs(): number {
   return MIN_ROLL_GAP_MS + Math.random() * (MAX_ROLL_GAP_MS - MIN_ROLL_GAP_MS);
 }
 
+function randomInitialDelayMs(): number {
+  return INITIAL_ROLL_MIN_DELAY_MS + Math.random() * (INITIAL_ROLL_MAX_DELAY_MS - INITIAL_ROLL_MIN_DELAY_MS);
+}
+
 /** Two decorative dice above the login/register panel. There's no game yet at this
  * point — this only borrows the in-game `Dice` visuals to make the page feel alive.
- * Each die rolls to a new face on its own random schedule; only one tumbles at a time
- * and at least MIN_ROLL_GAP_MS separates one settling and the next starting (§4). */
+ * The first roll starts within a couple of seconds of mount; every roll after that
+ * lands on its own random schedule, one die at a time, with at least MIN_ROLL_GAP_MS
+ * separating one settling and the next starting (§4). */
 export function AutoDicePair() {
   const [values, setValues] = useState<[DiceValue, DiceValue]>([4, 6]);
   const [rollingIndex, setRollingIndex] = useState<0 | 1 | null>(null);
@@ -34,7 +44,7 @@ export function AutoDicePair() {
     let gapTimeoutId: number;
     let settleTimeoutId: number;
 
-    function scheduleNextRoll(): void {
+    function scheduleNextRoll(delayMs: number): void {
       gapTimeoutId = window.setTimeout(() => {
         const dieIndex: 0 | 1 = Math.random() < 0.5 ? 0 : 1;
         setRollingIndex(dieIndex);
@@ -45,12 +55,12 @@ export function AutoDicePair() {
             return next;
           });
           setRollingIndex(null);
-          scheduleNextRoll();
+          scheduleNextRoll(randomGapMs());
         }, ROLL_ANIMATION_MS);
-      }, randomGapMs());
+      }, delayMs);
     }
 
-    scheduleNextRoll();
+    scheduleNextRoll(randomInitialDelayMs());
     return () => {
       window.clearTimeout(gapTimeoutId);
       window.clearTimeout(settleTimeoutId);

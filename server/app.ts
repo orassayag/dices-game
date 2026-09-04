@@ -22,14 +22,15 @@ export function createApp() {
   // must not trust any X-Forwarded-For header, or the auth/gameplay rate limiters
   // (server/routes/auth.ts) could be bypassed by forging one (§10).
   app.set('trust proxy', false);
-  // Default CSP img-src ('self' data:) blocks the pravatar.cc player avatars — allow that
-  // one exact host explicitly rather than widening img-src to any origin.
+  // Default CSP img-src ('self' data:) blocks the pravatar.cc player avatars and the
+  // fixed AI opponent avatar — allow both exact hosts explicitly rather than widening
+  // img-src to any origin.
   app.use(
     helmet({
       contentSecurityPolicy: {
         directives: {
           ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-          'img-src': ["'self'", 'data:', 'https://i.pravatar.cc'],
+          'img-src': ["'self'", 'data:', 'https://i.pravatar.cc', 'https://img.magnific.com'],
         },
       },
     }),

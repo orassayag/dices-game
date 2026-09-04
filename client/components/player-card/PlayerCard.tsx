@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { Crown, Loader2 } from 'lucide-react';
-import { avatarUrl, fallbackAvatarUrl } from '../../lib/playerAvatars';
+import { fallbackAvatarUrl } from '../../lib/playerAvatars';
 import './playerCard.css';
 
 interface PlayerCardProps {
   seatNumber: 1 | 2;
   name: string;
-  avatarImageId: number;
+  // Resolved by the caller (GameBoard) via `resolveSeatDisplay` — either a pravatar.cc
+  // photo URL or the fixed AI opponent avatar; this component doesn't know which.
+  avatarSrc: string;
   score: number;
   isCurrentTurn: boolean;
   isWinner: boolean;
@@ -18,7 +20,7 @@ interface PlayerCardProps {
 export function PlayerCard({
   seatNumber,
   name,
-  avatarImageId,
+  avatarSrc,
   score,
   isCurrentTurn,
   isWinner,
@@ -47,13 +49,19 @@ export function PlayerCard({
           sits on top of the avatar instead of covering part of the image, and both
           player cards stay the same height whether or not either shows one. */}
       <div className="flex h-8 items-center justify-center">
-        {isWinner && <Crown size={32} aria-hidden="true" className="text-warning drop-shadow" />}
+        {isWinner && (
+          <Crown
+            size={32}
+            aria-hidden="true"
+            className="winner-fade-in text-warning drop-shadow"
+          />
+        )}
       </div>
       {/* relative wrapper sized to match the avatar circle exactly, so the loading spinner
           overlay below sits inside it rather than needing its own size bookkeeping. */}
       <div className="relative size-20 sm:size-24">
         <img
-          src={avatarUrl(avatarImageId)}
+          src={avatarSrc}
           alt={`Player ${seatNumber}'s avatar`}
           onLoad={() => setAvatarLoaded(true)}
           onError={(event) => {
@@ -61,16 +69,17 @@ export function PlayerCard({
             event.currentTarget.src = fallbackAvatarUrl(name);
             setAvatarLoaded(true);
           }}
-          className={`size-full rounded-full object-cover ${
+          className={`size-full rounded-full object-cover transition-[box-shadow] duration-700 ease-out ${
             // The winner ring matches the crown's color (text-warning) so the two read as
             // one signal. A real "your turn" border reads clearly against both themes only
             // if it's literally white, not a token — same reasoning as the dice faces in
-            // dice.css.
+            // dice.css. Every other seat still gets the same white ring by default, so the
+            // orange-on-turn switch is the only border color change happening.
             isWinner
               ? 'winner-avatar ring-4 ring-warning'
               : isCurrentTurn
-                ? 'ring-4 ring-white'
-                : 'ring-2 ring-border'
+                ? 'ring-4 ring-accent'
+                : 'ring-4 ring-white'
           }`}
         />
         {/* Decorative only — not role="status": GameBoard's "Game over" banner is the one
@@ -92,11 +101,15 @@ export function PlayerCard({
       >
         {name}
       </p>
-      <p className="text-3xl font-bold sm:text-4xl">{score}</p>
+      <p className={`text-3xl font-bold sm:text-4xl ${isCurrentTurn ? 'text-accent' : ''}`}>
+        {score}
+      </p>
       {/* Not a live region — GameBoard's own "Game over" banner is the single status
           announcement per finished game (only one `role="status"` should ever be live
           at once); this is just the per-card label reinforcing the same crown/ring. */}
-      {isWinner && <p className="text-sm font-semibold text-success">Winner!</p>}
+      {isWinner && (
+        <p className="winner-fade-in text-sm font-semibold text-success">Winner!</p>
+      )}
     </div>
   );
 }

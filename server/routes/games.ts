@@ -13,7 +13,7 @@ import {
   ListGamesQuerySchema,
 } from '../../shared/index.js';
 import { RateLimitedError } from '../lib/errors.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireUserId } from '../middleware/auth.js';
 import { csrfProtection } from '../middleware/csrf.js';
 import { validateBody } from '../middleware/validate.js';
 import {
@@ -34,16 +34,6 @@ gamesRouter.use(requireAuth);
 type GameIdParams = { id: string };
 type CreateGameRequest = Request<Record<string, never>, unknown, CreateGameInput>;
 type GameActionRequest = Request<GameIdParams, unknown, ExpectedVersionInput>;
-
-// requireAuth (mounted above) always sets req.userId before any handler here runs;
-// this guard only protects against a future reordering mistake, not a real user path.
-function requireUserId(req: Request): string {
-  const userId = req.userId;
-  if (!userId) {
-    throw new Error('NO_USER_ID_ON_REQUEST — requireAuth must run before this handler.');
-  }
-  return userId;
-}
 
 function rejectWithRateLimitedError(_req: Request, _res: Response, next: NextFunction): void {
   next(new RateLimitedError('Too many requests. Please try again later.'));

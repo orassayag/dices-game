@@ -6,7 +6,7 @@ import { Button } from '../button/Button';
 import { Confetti } from '../confetti/Confetti';
 import { Leaderboard } from '../leaderboard/Leaderboard';
 import { PlayerCard } from '../player-card/PlayerCard';
-import type { PlayerIdentities } from '../../lib/playerAvatars';
+import { resolveSeatDisplay, type PlayerIdentities } from '../../lib/playerAvatars';
 import './gameBoard.css';
 
 interface GameBoardProps {
@@ -170,6 +170,11 @@ export function GameBoard({
   // Only highlight a "current" half while the game can still be acted on — a finished
   // game's currentSeat is stale (whoever would've gone next) and shouldn't read as active.
   const showTurnHighlight = game.status === 'in_progress';
+  // §4: the AI opponent's fixed name/avatar replace whichever seat it's currently
+  // playing; `identities` itself is untouched, so switching that seat back to "Human"
+  // (next New Game) shows the same player as before with no restore step needed.
+  const seat1Display = resolveSeatDisplay(identities.seat1, game.mode === 'ai' && game.aiSeat === 1);
+  const seat2Display = resolveSeatDisplay(identities.seat2, game.mode === 'ai' && game.aiSeat === 2);
 
   return (
     <section
@@ -202,8 +207,8 @@ export function GameBoard({
           placement — always visible, never competing with the round-score area below. */}
       <div className="absolute top-3 left-3 sm:top-4 sm:left-4">
         <Leaderboard
-          seat1={{ seatNumber: 1, name: identities.seat1.name, wins: wins[1] }}
-          seat2={{ seatNumber: 2, name: identities.seat2.name, wins: wins[2] }}
+          seat1={{ seatNumber: 1, name: seat1Display.name, wins: wins[1] }}
+          seat2={{ seatNumber: 2, name: seat2Display.name, wins: wins[2] }}
         />
       </div>
 
@@ -226,53 +231,62 @@ export function GameBoard({
       </div>
 
       {hasWinner && (
-        <p role="status" className="text-center text-lg font-bold text-success sm:text-xl">
-          🏆🏆🏆 {game.winnerSeat === 1 ? identities.seat1.name : identities.seat2.name} wins!
+        <p
+          role="status"
+          className="winner-fade-in text-center text-lg font-bold text-success sm:text-xl"
+        >
+          🏆🏆🏆 {game.winnerSeat === 1 ? seat1Display.name : seat2Display.name} wins!
           🏆🏆🏆
         </p>
       )}
 
-      <div className="grid grid-cols-2 gap-4">
+      {/* Requirement: the dice sit between the two avatars at the same line height, not
+          below the whole player row — one 3-column grid instead of a player-card row
+          followed by a separate dice row. `items-center` vertically centers the shorter
+          middle (dice) column against the taller PlayerCard columns, landing it level
+          with the avatars rather than the names/scores above and below them. */}
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4">
         <PlayerCard
           seatNumber={1}
-          name={identities.seat1.name}
-          avatarImageId={identities.seat1.avatarImageId}
+          name={seat1Display.name}
+          avatarSrc={seat1Display.avatarSrc}
           score={game.p1Score}
           isCurrentTurn={game.currentSeat === 1}
           isWinner={game.status === 'finished' && game.winnerSeat === 1}
           isThinking={aiThinking && game.aiSeat === 1}
         />
+
+        <div
+          className={`flex items-center justify-center gap-2 rounded-xl bg-surface-alt px-3 py-3 sm:gap-4 sm:px-5 ${
+            frozen ? 'outline outline-2 outline-danger' : ''
+          }`}
+        >
+          <Dice value={displayDice ? displayDice[0] : null} rolling={rolling} />
+
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-xs font-medium tracking-wide whitespace-nowrap uppercase text-muted-foreground">
+              Round score
+            </span>
+            <span
+              key={scorePulseKey}
+              className="round-score-value text-3xl font-black text-accent sm:text-4xl"
+            >
+              {displayedRoundScore}
+            </span>
+          </div>
+
+          <Dice value={displayDice ? displayDice[1] : null} rolling={rolling} />
+        </div>
+
         <PlayerCard
           seatNumber={2}
-          name={identities.seat2.name}
-          avatarImageId={identities.seat2.avatarImageId}
+          name={seat2Display.name}
+          avatarSrc={seat2Display.avatarSrc}
           score={game.p2Score}
           isCurrentTurn={game.currentSeat === 2}
           isWinner={game.status === 'finished' && game.winnerSeat === 2}
           isThinking={aiThinking && game.aiSeat === 2}
         />
-      </div>
-
-      <div
-        className={`mx-auto flex w-full max-w-xs items-center justify-center gap-3 rounded-xl bg-surface-alt px-4 py-3 sm:max-w-sm sm:gap-5 sm:px-6 sm:py-4 ${
-          frozen ? 'outline outline-2 outline-danger' : ''
-        }`}
-      >
-        <Dice value={displayDice ? displayDice[0] : null} rolling={rolling} />
-
-        <div className="flex flex-col items-center gap-0.5">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Round score
-          </span>
-          <span
-            key={scorePulseKey}
-            className="round-score-value text-3xl font-black text-accent sm:text-4xl"
-          >
-            {displayedRoundScore}
-          </span>
-        </div>
-
-        <Dice value={displayDice ? displayDice[1] : null} rolling={rolling} />
       </div>
 
       {lastMoveMessage && <p className="text-center text-sm">{lastMoveMessage}</p>}

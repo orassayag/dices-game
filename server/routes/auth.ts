@@ -7,10 +7,10 @@ import { env } from '../config/env.js';
 import { AUTH_TOKEN_LIFETIME_SECONDS, normalizeUsernameKey } from '../lib/authCrypto.js';
 import { generatePreAuthCsrfToken, generateUserBoundCsrfToken } from '../lib/csrfCrypto.js';
 import { RateLimitedError } from '../lib/errors.js';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireUserId } from '../middleware/auth.js';
 import { csrfProtection } from '../middleware/csrf.js';
 import { validateBody } from '../middleware/validate.js';
-import { loginUser, registerUser } from '../services/authService.js';
+import { getAuthenticatedUser, loginUser, registerUser } from '../services/authService.js';
 
 // Auth rate limits (plan_v6.md §10). `app.set('trust proxy', false)` (server/app.ts)
 // makes `req.ip` the real socket address, so neither limiter can be bypassed by a forged
@@ -92,6 +92,24 @@ authRouter.get('/csrf', (_req: Request, res: Response): void => {
   setCsrfCookie(res, generatePreAuthCsrfToken(), PRE_AUTH_CSRF_COOKIE_MAX_AGE_MS);
   res.status(204).end();
 });
+
+// Restores the session on page reload (bug report: a refresh logged the user back out)
+// — the client calls this once on mount instead of assuming "no local state" means "no
+// session". GET is exempt from csrfProtection, so this needs only requireAuth: a valid,
+// unrevoked auth cookie alone is enough to read the session back.
+authRouter.get(
+  '/me',
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const user = await getAuthenticatedUser(requireUserId(req));
+      const body: AuthResponse = { user };
+      res.status(200).json(body);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 // validateBody replaces req.body with the parsed AuthCredentialsInput before this
 // handler runs, so the { username, password } destructure below is sound even though
