@@ -1,0 +1,78 @@
+// Data model per docs/plans/plan_v6.md §2. DB-level invariants (CHECK constraints,
+// triggers, the partial unique index) are NOT expressible in Prisma's schema DSL — they
+// live in a hand-written raw-SQL migration (see migrations/20260904000100_db_invariants/)
+// layered on top of the tables this file generates.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum GameMode {
+  human
+  ai
+}
+
+enum GameStatus {
+  in_progress
+  finished
+  abandoned
+}
+
+enum MoveKind {
+  roll
+  hold
+  forfeit
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String
+  usernameKey  String   @unique // trim + NFKC + lowercase, set by the auth service (M1)
+  passwordHash String
+  tokenVersion Int      @default(0) // bumped to revoke every outstanding JWT
+  wins         Int      @default(0) // Extra 1 — human-only win counter
+  createdAt    DateTime @default(now())
+  games        Game[]
+}
+
+model Game {
+  id          String     @id @default(cuid())
+  ownerUserId String
+  owner       User       @relation(fields: [ownerUserId], references: [id])
+  mode        GameMode   @default(human)
+  aiSeat      Int? // 1 | 2 when mode = ai; DB CHECK ties this to `mode`
+  aiMoveCount Int        @default(0) // successful AI moves only; hard cap 50 (I1)
+  targetScore Int // 10-1000, set only at create
+  status      GameStatus @default(in_progress)
+  currentSeat Int        @default(1) // 1 | 2
+  p1Score     Int        @default(0)
+  p2Score     Int        @default(0)
+  roundScore  Int        @default(0)
+  lastDice    Int[]      @default([])
+  winnerSeat  Int?
+  version     Int        @default(0) // optimistic lock
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  moves       Move[]
+
+  @@index([ownerUserId, status])
+}
+
+model Move {
+  id         String   @id @default(cuid())
+  gameId     String
+  game       Game     @relation(fields: [gameId], references: [id])
+  actorSeat  Int
+  kind       MoveKind
+  dice       Int[]    @default([])
+  busted     Boolean  @default(false)
+  roundScore Int // round score AFTER this move
+  createdAt  DateTime @default(now())
+
+  @@index([gameId])
+}

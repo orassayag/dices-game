@@ -1,7 +1,3 @@
-// Schema-derived types (CreateItemInput, UpdateItemInput, Item) live in ./schemas.ts.
-// This file holds types with no Zod schema counterpart.
-
-export type ApiError = {
-  error: string;
-  details?: Array<{ field: string; message: string }>;
-};
+// Schema-derived types live in ./schemas.ts; the error envelope type lives in
+// ./errors.ts. This file holds types with no Zod schema counterpart — none yet.
+export {};

@@ -1,12 +1,9 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { Home } from './pages/Home';
-
+// Real screens (LoginScreen, GameScreen) land at M4 (master stages 7-8) — this
+// placeholder just confirms the M0 Tailwind + build pipeline renders.
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Home />} />
-      </Routes>
-    </BrowserRouter>
+    <main className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-100">
+      <p className="text-sm text-slate-400">Dice game — foundation stage. UI lands at M4.</p>
+    </main>
   );
 }

@@ -15,16 +15,31 @@ Scaffolded from the `fullstack-lite` boilerplate (via `/boiler`) — a single fl
 not a pnpm workspace. Three folders, one install, one `package.json`:
 
 - `server/` — Express + TypeScript REST API. Owns all game rules, identity, and state.
-  Ships on `node:sqlite`; **Prisma + PostgreSQL replace it during feature execution (M0+)**
-  per `docs/plans/plan_v6.md` — swapping only `server/db.ts` and `server/services/*.ts`.
+  **Prisma 6.19.3 + PostgreSQL landed at M0**, replacing the boilerplate's `node:sqlite`
+  (`server/db.ts` is now a `PrismaClient` singleton; schema + DB-invariant migrations live
+  in `server/prisma/`). Local Postgres runs via `docker compose up -d`
+  (`docker-compose.yml`, port 5432, db `dices_game`). Pinned to Prisma **6.x** rather than
+  the newer 7.x major — 7 requires a driver adapter, a custom generator output path, and a
+  `prisma.config.ts` for no functional benefit this plan needs; 6.19.3 is the simpler,
+  equally-current stable line.
 - `client/` — React 19 + Vite 6 SPA. Renders state and calls the API only — no game logic.
-  Tailwind v4 is **not** in the default scaffold; it is added at milestone M0 per the plan
-  (`pnpm add -D tailwindcss @tailwindcss/vite`, `@import "tailwindcss"`).
+  **Tailwind v4.3.3 landed at M0** (`@tailwindcss/vite` plugin in `vite.config.ts`,
+  `client/index.css` holds the single `@import "tailwindcss";`).
 - `shared/` — Zod schemas + inferred DTO types, the only crossing point between `server/`
-  and `client/`. Currently the boilerplate's placeholder `items` example; built out at M2.
+  and `client/`. `shared/errors.ts` (new at M0) holds the `ErrorCode` union + HTTP status
+  table + the `{ error: { code, message } }` envelope schema — both `server/lib/errors.ts`
+  and, later, the frontend import it. `shared/schemas.ts` still holds the boilerplate's
+  placeholder `items` example (replaced wholesale at M2, not touched at M0).
 
-Boilerplate scaffold verified green (`pnpm install`, `type-check`, `lint`, `test` — 13/13
-passing). Feature implementation follows `docs/plans/plan_v6.md` milestones M0–M5.
+M0 (foundation) is complete: Prisma schema + DB-invariant migrations (§2, incl. the I7
+winner⇔score CHECKs), `server/config/env.ts` (JWT_SECRET/FRONTEND_URL/DICE_SEED
+validation, cookie-flag derivation), the error envelope + typed error classes
+(`server/lib/errors.ts`), a minimal structured logger (`server/lib/logger.ts`, no
+`console.*` anywhere), credentialed CORS, Tailwind, and the two-project Vitest split
+(`web` under jsdom, `api` under real Postgres via `server/__tests__/helpers/globalSetup.ts`
++ `truncateAll()`). Verified green (`pnpm install`, `type-check`, `lint`, `test` — 13/13
+passing, `build`, and a manual `/health` + unknown-route smoke test). Feature
+implementation continues per `docs/plans/plan_v6.md` milestones M1–M5.
 
 **Note:** an earlier version of this file described a pnpm-workspace monorepo
 (`apps/api`/`apps/web`/`packages/shared`, from `api-express` + `react-spa`). That scaffold
@@ -64,18 +79,23 @@ AI opponent, a brief disable/animation on rolling 6 & 6, sound effects, other cr
 ## Workspace commands
 
 Single flat package at the repo root — one `pnpm install`, no `-r`/`--filter` needed.
+Requires a local PostgreSQL — `docker compose up -d` (docker-compose.yml) before `dev`,
+`build`, or `test`; the `test` project also needs Docker running (it creates and migrates
+a disposable `dices_game_test` database on the same instance).
 
 ```bash
-pnpm install            # Install all dependencies
-pnpm run dev             # Start server (:3000) + client (:5173) together
-pnpm run dev:server      # Server only, tsx watch
-pnpm run dev:client      # Client only, Vite dev server
-pnpm run build           # Build client + full type-check
-pnpm run start           # Run production server (serves built client + API)
-pnpm run type-check      # Type-check (alias of typecheck)
-pnpm run lint            # Lint all files
-pnpm run test            # Run all tests once
-pnpm run test:coverage   # Run tests with coverage (60/60/50 thresholds)
+docker compose up -d     # Start local PostgreSQL (once per machine reboot)
+pnpm install             # Install all dependencies (postinstall runs `prisma generate`)
+pnpm run db:migrate      # Apply Prisma migrations to the dev DB (prisma migrate dev)
+pnpm run dev              # Start server (:3000) + client (:5173) together
+pnpm run dev:server       # Server only, tsx watch
+pnpm run dev:client       # Client only, Vite dev server
+pnpm run build            # prisma generate + build client + full type-check
+pnpm run start            # Run production server (serves built client + API)
+pnpm run type-check       # Type-check (alias of typecheck)
+pnpm run lint             # Lint all files
+pnpm run test             # Run all tests once (both Vitest projects: web + api)
+pnpm run test:coverage    # Run tests with coverage (60/60/50 thresholds)
 ```
 
 ---
@@ -136,8 +156,8 @@ per-folder `CLAUDE.md` split.
 - `server/` — Node-only code. Never import anything from `client/` here.
 - `client/` — Browser-only code. Never import anything from `server/` here.
 - `shared/` — The ONLY crossing point. Zod schemas and derived TypeScript types only. Safe for both sides. Import through the `shared/index.ts` barrel (`from '../../shared'`) rather than reaching into `shared/schemas` or `shared/types` directly.
-- Tests are co-located in `__tests__/` folders next to the code they exercise (e.g. `server/routes/__tests__/`, `client/components/<name>/__tests__/`) — no root-level `tests/` folder. `vitest.setup.ts` at the root holds shared test setup; server test files opt into `node` env with `// @vitest-environment node`.
-- `data/` — SQLite DB files (gitignored, created at runtime) — dropped once Prisma/PostgreSQL land per the plan.
+- Tests are co-located in `__tests__/` folders next to the code they exercise (e.g. `server/prisma/__tests__/`, `client/components/<name>/__tests__/`) — no root-level `tests/` folder. Two Vitest **projects** (`vitest.config.ts`): `web` (jsdom, `vitest.setup.ts`) and `api` (real Node + Postgres, `vitest.setup.server.ts` + `server/__tests__/helpers/globalSetup.ts`). Server test files still carry `// @vitest-environment node` for clarity even though the `api` project already sets it.
+- `data/` — dropped at M0 along with `node:sqlite`; Prisma/PostgreSQL persist to the Docker-managed `postgres-data` volume instead (`docker-compose.yml`).
 
 #### Key conventions
 - **`app.ts` exports `createApp()` — never calls `listen()`.** `index.ts` is the only file that calls `listen()`. This makes the app importable in tests without port conflicts.
@@ -147,7 +167,7 @@ per-folder `CLAUDE.md` split.
 - **All POST/PUT/PATCH bodies are validated with Zod.** No exceptions.
 - **Parameterized SQL only.** Never interpolate user input into SQL strings.
 - **All relative imports include the `.js` extension in server and shared files** (ESM project, `"type": "module"`). `import { createApp } from './app.js'` ✓ — not `'./app'`. Client files (Vite-processed) don't need extensions.
-- **Test environment uses `:memory:` SQLite** by default — `vitest.setup.ts` sets `DB_PATH=:memory:`. Once Prisma/PostgreSQL replace SQLite per the plan, swap this for the plan's own test-DB `globalSetup` strategy (§12).
+- **Test DB strategy (§12, landed at M0).** The `api` Vitest project's `globalSetup` creates a disposable `dices_game_test` Postgres database (if missing) and applies every migration via `prisma migrate deploy` — real Postgres, not SQLite, so raw-SQL triggers/CHECKs are exercised as in production. Each test file calls `truncateAll()` (`server/__tests__/helpers/testDb.ts`) in `beforeEach` to reset state; the project is serialized (`poolOptions.threads.singleThread`) since every suite shares one database.
 
 #### Naming conventions
 | Thing | Convention |
@@ -175,12 +195,15 @@ rather than re-asking, except where the plan itself marks something open (see it
 ---
 ## Known gotchas
 
-- **Response-envelope mismatch (fullstack-lite → plan contract).** The boilerplate's `server/middleware/errorHandler.ts` returns `{ error: string }` / `{ error: 'Validation failed', details }`; the plan mandates a **bare DTO** for success and `{ error: { code, message } }` for errors. Implement the plan's literal contract; derive `error.code` via a statusCode→code map rather than keeping the boilerplate's shape. (lesson L001)
-- **CORS is not "out of scope" here despite the boilerplate's default.** `fullstack-lite` treats CORS as unnecessary (same-origin prod serving, dev proxy). This project still needs credentialed CORS pinned to `FRONTEND_URL` — dev runs `client:5173`/`server:3000` as separate origins, and the plan's CSRF `Origin` check depends on it. Never default to `'*'`; fail closed toward the spec. (lesson L002)
+- **Response-envelope mismatch (fullstack-lite → plan contract) — implemented at M0.** `server/middleware/errorHandler.ts` now returns the plan's bare-DTO-on-success / `{ error: { code, message } }`-on-error contract; `code` comes from `shared/errors.ts`'s `ErrorCode` union via `AppError` subclasses in `server/lib/errors.ts`, not a statusCode→code guess. (lesson L001)
+- **CORS is not "out of scope" here despite the boilerplate's default — wired at M0.** `fullstack-lite` treats CORS as unnecessary (same-origin prod serving, dev proxy). `server/app.ts` runs credentialed CORS pinned to `env.frontendUrl` (never `'*'`) — dev runs `client:5173`/`server:3000` as separate origins, and the CSRF `Origin` check (landing at M1b) will reuse the same allowlist. (lesson L002)
 - **Gate fetch-on-mount to preserve in-memory state.** For a screen that must both fetch fresh and survive navigation (e.g. resume), gate the query (`enabled: …`/emptiness check) rather than an unconditional mount fetch that clobbers in-memory state. (lesson L003)
 - **Keep feature components router-agnostic.** Pass an `onSelect(id)` callback rather than importing `react-router-dom` inside a reusable feature component; only pages/layouts navigate. (lesson L004)
 - **Never name a data file literally `tsconfig.json` under `src/`** — it breaks Vite/tsconfck detection. Use a distinct suffix (`tsconfig.kb.json`). (lesson L011)
 - **`@anthropic-ai/sdk` `zodOutputFormat()` wants a `zod/v4` import** — if the M5 AI adapter uses that helper, import `z` from `'zod/v4'` for that schema only; keep the rest on classic `'zod'` v3 (the boilerplate's own `shared/schemas.ts` convention). (lesson L014)
+- **Prisma is pinned to 6.19.3, not the `latest` 8.0.0-rc.x tag or the 7.x stable line.** `pnpm view prisma dist-tags` currently resolves `latest` to an **8.0.0 release candidate** — never install that blindly (CLAUDE.md's own package-version rule). 7.x is stable but requires a driver adapter (`@prisma/adapter-pg`), a required custom generator `output` path, and a `prisma.config.ts` — real complexity this plan gets no benefit from. 6.19.3 uses the traditional `prisma-client-js` generator with no extra config.
+- **Local Postgres is required before `dev`/`build`/`test` will work** — `docker compose up -d` (`docker-compose.yml`) starts it; the `api` Vitest project's `globalSetup` needs the daemon reachable to create/migrate the disposable `dices_game_test` database. A missing/unreachable Docker daemon fails loudly with a clear message from `server/__tests__/helpers/globalSetup.ts`, not a hang.
+- **`Game.updatedAt` (`@updatedAt`) has no DB-level default** — Prisma sets it client-side on every write. A raw-SQL `INSERT` (e.g. in `schema.test.ts`, deliberately bypassing the typed client to test invalid values) must supply it explicitly or the insert fails on a NOT NULL violation before ever reaching the CHECK constraint being tested.
 
 ---
 ## Preferences

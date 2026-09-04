@@ -1,14 +1,14 @@
-# node:sqlite requires Node 22.10+; no native compilation needed, so slim works.
 FROM node:22-slim
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm ci
+RUN corepack enable
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
 
 COPY . .
-RUN npm run build
+RUN pnpm run build
 
 EXPOSE 3000
 ENV NODE_ENV=production
-CMD ["node", "--import", "tsx/esm", "server/index.ts"]
+CMD ["sh", "-c", "pnpm exec prisma migrate deploy && node --import tsx/esm server/index.ts"]

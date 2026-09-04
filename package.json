@@ -6,12 +6,18 @@
   "engines": {
     "node": ">=22.10.0"
   },
+  "prisma": {
+    "schema": "server/prisma/schema.prisma"
+  },
   "scripts": {
     "dev": "concurrently \"pnpm run dev:server\" \"pnpm run dev:client\"",
     "dev:server": "tsx watch server/index.ts",
     "dev:client": "vite",
-    "build": "vite build && tsc --noEmit",
+    "build": "prisma generate && vite build && tsc --noEmit",
     "start": "NODE_ENV=production tsx server/index.ts",
+    "postinstall": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -23,6 +29,8 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@prisma/client": "6.19.3",
+    "cors": "2.8.6",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "helmet": "^8.0.0",
@@ -34,9 +42,11 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
+    "@tailwindcss/vite": "4.3.3",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
     "@testing-library/user-event": "^14.5.2",
+    "@types/cors": "2.8.19",
     "@types/express": "^4.17.21",
     "@types/morgan": "^1.9.9",
     "@types/node": "^22.0.0",
@@ -52,7 +62,9 @@
     "eslint-plugin-react-refresh": "^0.4.16",
     "jsdom": "^26.0.0",
     "prettier": "^3.4.2",
+    "prisma": "6.19.3",
     "supertest": "^7.0.0",
+    "tailwindcss": "4.3.3",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.0",

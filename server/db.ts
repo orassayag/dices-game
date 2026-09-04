@@ -1,25 +1,8 @@
-import { DatabaseSync } from 'node:sqlite';
-import { mkdirSync } from 'fs';
-import { dirname } from 'path';
+import { PrismaClient } from '@prisma/client';
 
-const dbPath = process.env.DB_PATH ?? './data/app.db';
+// Single shared instance — Prisma pools connections internally, so a second
+// PrismaClient per process would double the pool for no benefit (and, in dev
+// with tsx watch, leak a connection on every reload without this singleton).
+const prisma = new PrismaClient();
 
-if (dbPath !== ':memory:') {
-  mkdirSync(dirname(dbPath), { recursive: true });
-}
-
-const db = new DatabaseSync(dbPath);
-
-db.exec('PRAGMA journal_mode = WAL');
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    description TEXT,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-  )
-`);
-
-export default db;
+export default prisma;
