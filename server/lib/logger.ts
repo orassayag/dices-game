@@ -1,4 +1,8 @@
-type LogLevel = 'info' | 'warn' | 'error';
+import path from 'node:path';
+import pino from 'pino';
+import pinoPretty from 'pino-pretty';
+import { env } from '../config/env.js';
+
 export type LogMetadata = Record<string, unknown>;
 
 export interface Logger {
@@ -7,24 +11,26 @@ export interface Logger {
   error(message: string, metadata?: LogMetadata): void;
 }
 
-// Minimal structured logger — one JSON line per call, scoped by caller. Stands in for
-// a full logging SDK (this take-home has none installed); every call site gets
-// `loggerFactory.create('<scoped-name>')`-equivalent scoping without an unscoped
-// console.* call anywhere in business code (error-handling-logging.md).
-function write(scope: string, level: LogLevel, message: string, metadata?: LogMetadata): void {
-  const entry = { timestamp: new Date().toISOString(), level, scope, message, ...metadata };
-  const line = `${JSON.stringify(entry)}\n`;
-  if (level === 'error') {
-    process.stderr.write(line);
-  } else {
-    process.stdout.write(line);
-  }
-}
+const LOG_FILE_PATH: string = path.join(process.cwd(), 'logs', 'server.log');
+
+// Console gets colorized, human-scannable lines in dev; production keeps pino's
+// default single-line JSON so log aggregators can parse it. The file destination is
+// always raw JSON, regardless of environment, since it's read by tooling, not eyes.
+// `mkdir: true` creates the (gitignored) logs/ directory on first write.
+const consoleStream = env.isProduction
+  ? { stream: process.stdout }
+  : { stream: pinoPretty({ colorize: true, translateTime: 'SYS:standard', ignore: 'pid,hostname' }) };
+
+const rootLogger = pino(
+  { timestamp: pino.stdTimeFunctions.isoTime },
+  pino.multistream([consoleStream, { stream: pino.destination({ dest: LOG_FILE_PATH, mkdir: true }) }]),
+);
 
 export function createLogger(scope: string): Logger {
+  const scopedLogger = rootLogger.child({ scope });
   return {
-    info: (message, metadata) => write(scope, 'info', message, metadata),
-    warn: (message, metadata) => write(scope, 'warn', message, metadata),
-    error: (message, metadata) => write(scope, 'error', message, metadata),
+    info: (message, metadata) => scopedLogger.info(metadata ?? {}, message),
+    warn: (message, metadata) => scopedLogger.warn(metadata ?? {}, message),
+    error: (message, metadata) => scopedLogger.error(metadata ?? {}, message),
   };
 }
