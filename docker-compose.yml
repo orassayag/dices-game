@@ -1,3 +1,5 @@
+# One-command local stack: `docker compose up` brings up Postgres, migrates the schema,
+# and serves the built client + API from a single container on one port.
 services:
   postgres:
     image: postgres:17-alpine
@@ -15,6 +17,25 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgres://dices_game:dices_game@postgres:5432/dices_game
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      # Only ever set here — see server/config/env.ts. The container is reached at
+      # localhost:3000 by design for this demo; a real deployment must not set this.
+      ALLOW_LOCAL_FRONTEND_URL: 'true'
+      # Dev-only placeholder (>= 32 bytes). Override for anything beyond local Docker use.
+      JWT_SECRET: ${JWT_SECRET:-dev-only-insecure-secret-change-me-0123456789abcdef}
+    ports:
+      - '3000:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   postgres-data:

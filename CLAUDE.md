@@ -79,12 +79,20 @@ AI opponent, a brief disable/animation on rolling 6 & 6, sound effects, other cr
 ## Workspace commands
 
 Single flat package at the repo root — one `pnpm install`, no `-r`/`--filter` needed.
-Requires a local PostgreSQL — `docker compose up -d` (docker-compose.yml) before `dev`,
-`build`, or `test`; the `test` project also needs Docker running (it creates and migrates
-a disposable `dices_game_test` database on the same instance).
+
+**One-command full stack (recommended):** `docker compose up` builds the app image
+(root `Dockerfile`), brings up Postgres, applies migrations, and serves the built
+client + API together on `http://localhost:3000` — see `docker-compose.yml`'s `app`
+service. This always runs a production build; use it for a quick demo, not hot-reload.
+
+**Per-side dev loop:** requires a local PostgreSQL — `docker compose up -d postgres`
+(docker-compose.yml) before `dev`, `build`, or `test`; the `test` project also needs
+Docker running (it creates and migrates a disposable `dices_game_test` database on the
+same instance).
 
 ```bash
-docker compose up -d     # Start local PostgreSQL (once per machine reboot)
+docker compose up               # Full stack: Postgres + migrate + built app on :3000
+docker compose up -d postgres   # Local PostgreSQL only (once per machine reboot)
 pnpm install             # Install all dependencies (postinstall runs `prisma generate`)
 pnpm run db:migrate      # Apply Prisma migrations to the dev DB (prisma migrate dev)
 pnpm run dev              # Start server (:3000) + client (:5173) together
@@ -204,6 +212,7 @@ rather than re-asking, except where the plan itself marks something open (see it
 - **Prisma is pinned to 6.19.3, not the `latest` 8.0.0-rc.x tag or the 7.x stable line.** `pnpm view prisma dist-tags` currently resolves `latest` to an **8.0.0 release candidate** — never install that blindly (CLAUDE.md's own package-version rule). 7.x is stable but requires a driver adapter (`@prisma/adapter-pg`), a required custom generator `output` path, and a `prisma.config.ts` — real complexity this plan gets no benefit from. 6.19.3 uses the traditional `prisma-client-js` generator with no extra config.
 - **Local Postgres is required before `dev`/`build`/`test` will work** — `docker compose up -d` (`docker-compose.yml`) starts it; the `api` Vitest project's `globalSetup` needs the daemon reachable to create/migrate the disposable `dices_game_test` database. A missing/unreachable Docker daemon fails loudly with a clear message from `server/__tests__/helpers/globalSetup.ts`, not a hang.
 - **`Game.updatedAt` (`@updatedAt`) has no DB-level default** — Prisma sets it client-side on every write. A raw-SQL `INSERT` (e.g. in `schema.test.ts`, deliberately bypassing the typed client to test invalid values) must supply it explicitly or the insert fails on a NOT NULL violation before ever reaching the CHECK constraint being tested.
+- **`ALLOW_LOCAL_FRONTEND_URL=true` is a one-off escape hatch, only for `docker-compose.yml`'s `app` service.** `server/config/env.ts` refuses to boot in production with a `localhost` `FRONTEND_URL` (§1/§13's hardening) — that's still true everywhere else. The one-container `docker compose up` demo is reachable only at `localhost:3000` by design, so its `app` service alone sets this flag to bypass the check; a real deployment must never set it. See `server/config/__tests__/env.test.ts` for the covered branches.
 
 ---
 ## Preferences

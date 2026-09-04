@@ -67,10 +67,22 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   requireByteLength(jwtSecret, JWT_SECRET_MIN_BYTES, 'JWT_SECRET');
 
   const frontendUrlRaw: string | undefined = source.FRONTEND_URL;
-  if (isProduction && (!frontendUrlRaw || frontendUrlRaw.includes('localhost'))) {
+  // Escape hatch for the single-container `docker-compose up` demo, where the app is
+  // reached at http://localhost:3000 by design and there is no real public origin to
+  // pin to. Never set this in an actual deployment — only docker-compose.yml sets it.
+  const allowLocalFrontendUrl: boolean = source.ALLOW_LOCAL_FRONTEND_URL === 'true';
+  if (
+    isProduction &&
+    !allowLocalFrontendUrl &&
+    (!frontendUrlRaw || frontendUrlRaw.includes('localhost'))
+  ) {
     throw new ConfigError(
-      'FRONTEND_URL is required in production and must not contain "localhost" — refusing to boot.',
+      'FRONTEND_URL is required in production and must not contain "localhost" — refusing to boot. ' +
+        '(Set ALLOW_LOCAL_FRONTEND_URL=true only for the local docker-compose demo.)',
     );
+  }
+  if (isProduction && allowLocalFrontendUrl && !frontendUrlRaw) {
+    throw new ConfigError('FRONTEND_URL is required in production even with ALLOW_LOCAL_FRONTEND_URL=true.');
   }
   const frontendUrl: string = frontendUrlRaw ?? DEFAULT_DEV_FRONTEND_URL;
 
