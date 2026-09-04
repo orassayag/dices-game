@@ -60,3 +60,37 @@ needs them to exist before implementing routes against them. Kept `shared/schema
 a single flat file, matching the already-established repo convention. Named constants for
 every numeric bound — no magic literals.
 **User overrides during review:** None recorded.
+
+## Stage 3 — Auth core: register/login/logout, bcrypt, JWT+tokenVersion, cookie, 503 path, auth rate limits (committed 2026-09-04)
+**Files:** package.json, pnpm-lock.yaml, server/app.ts, vitest.config.ts,
+server/lib/authCrypto.ts, server/middleware/auth.ts, server/middleware/validate.ts,
+server/services/authService.ts, server/routes/auth.ts,
+server/lib/__tests__/authCrypto.test.ts, server/middleware/__tests__/auth.test.ts,
+server/routes/__tests__/auth.test.ts, server/routes/__tests__/authRegisterRateLimit.test.ts,
+server/routes/__tests__/authLoginRateLimit.test.ts
+**What was built:** M1a per plan_v6.md §1/§5/§10, excluding hardened CSRF (M1b, deferred
+to stage 4). `server/lib/authCrypto.ts` — bcryptjs cost 12, module-level `DUMMY_BCRYPT_HASH`
+for constant-time login, HS256 JWT with `sub`+`tokenVersion`, `normalizeUsernameKey`
+(trim+NFKC+lowercase). `server/middleware/auth.ts` — `requireAuth` reads the `token`
+cookie, verifies JWT, re-reads DB `tokenVersion` under a 2s timeout: mismatch/expired →
+401, DB read failure/timeout → 503 SERVICE_UNAVAILABLE (I8), never a misleading 401.
+`server/services/authService.ts` — `registerUser` relies on the DB unique-constraint
+(P2002) catch rather than pre-check (closes the check-then-insert race); `loginUser`
+always runs exactly one `bcrypt.compare` (real hash or dummy) and returns one generic
+`INVALID_CREDENTIALS`. `server/routes/auth.ts` — register/login/logout with the
+HttpOnly/Secure(prod)/SameSite=Lax cookie, 12h maxAge; register limited 10/hr per IP,
+login limited 5/min per ip+normalized-username. `server/app.ts` — `trust proxy=false`,
+cookie-parser, `express.json({limit:'16kb'})`, `/auth` mounted. Also fixed a pre-existing
+test-infra race: `fileParallelism: false` must live at vitest's root config, not nested
+in the `api` project block. Verified: type-check, lint, test (78/78), build,
+`prettier --check`, manual curl smoke (register/login/logout/duplicate/wrong-password/
+malformed-JSON/unknown-route) all matching the documented envelope/status.
+**Key decisions:** bcryptjs over native `bcrypt` (zero build-toolchain requirement).
+Consolidated auth crypto into one file and inlined both rate limiters into the route file
+as deliberate file-count trims; still 14 touched files (package.json/pnpm-lock.yaml are
+mechanical `pnpm add` byproducts, and the two rate-limit test files are split out
+deliberately to avoid shared-counter contamination between tests). Register/login carry
+no CSRF cookie yet — `GET /auth/csrf` lands in stage 4. Logout does not bump
+`tokenVersion` (the plan documents cookie-clear and the tokenVersion bump as two separate
+capabilities, and the API table has no logout-all endpoint).
+**User overrides during review:** None recorded.

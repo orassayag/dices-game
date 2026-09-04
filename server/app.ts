@@ -2,15 +2,25 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { env } from './config/env.js';
 import { errorHandler, routeNotFoundHandler } from './middleware/errorHandler.js';
+import { authRouter } from './routes/auth.js';
 
 const clientDistDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../dist/client');
 
+// Body size cap (§10) — an oversized JSON body is rejected by express.json() itself,
+// before it ever reaches a route handler (or bcrypt, on the auth routes).
+const JSON_BODY_LIMIT: string = '16kb';
+
 export function createApp() {
   const app = express();
+  // This is a directly-exposed single instance (no reverse proxy in front) — Express
+  // must not trust any X-Forwarded-For header, or the auth/gameplay rate limiters
+  // (server/routes/auth.ts) could be bypassed by forging one (§10).
+  app.set('trust proxy', false);
   app.use(helmet());
   app.use(morgan(env.isProduction ? 'combined' : 'dev'));
   // Credentialed CORS pinned to an exact origin — never '*' (credentialed CORS forbids
@@ -18,13 +28,16 @@ export function createApp() {
   // because dev always runs client:5173/server:3000 as separate origins, and the CSRF
   // Origin check (added at M1b) reuses this same FRONTEND_URL allowlist.
   app.use(cors({ origin: env.frontendUrl, credentials: true }));
-  app.use(express.json());
+  app.use(express.json({ limit: JSON_BODY_LIMIT }));
+  app.use(cookieParser());
 
   app.get('/health', (_req, res) => {
     res.status(200).json({ status: 'ok' });
   });
 
-  // Route handlers land here at M1/M3/M5 (auth, game, ai-turn).
+  app.use('/auth', authRouter);
+
+  // Route handlers land here at M3/M5 (game, ai-turn).
 
   // In production the server is the single deployment unit: it serves the
   // Vite-built client alongside the API. In dev, Vite serves the client.
