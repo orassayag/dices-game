@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { GameStateDto } from '../../../../shared/index';
-import { GameScreen } from '../GameScreen';
+import { GamePage } from '../GamePage';
 import { ApiError } from '../../../api/apiClient';
 import * as gamesApi from '../../../api/gamesApi';
 
@@ -28,14 +28,14 @@ function freshGame(overrides: Partial<GameStateDto> = {}): GameStateDto {
   };
 }
 
-describe('GameScreen', () => {
+describe('GamePage', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
   it('should open the new-game modal automatically when no in-progress game exists', async () => {
     vi.spyOn(gamesApi, 'listInProgressGames').mockResolvedValue([]);
-    render(<GameScreen user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
+    render(<GamePage user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
 
     expect(await screen.findByRole('heading', { name: 'New Game' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
@@ -43,7 +43,7 @@ describe('GameScreen', () => {
 
   it('should always open the new-game modal on load, even when an in-progress game exists', async () => {
     vi.spyOn(gamesApi, 'listInProgressGames').mockResolvedValue([freshGame()]);
-    render(<GameScreen user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
+    render(<GamePage user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
 
     expect(await screen.findByRole('heading', { name: 'New Game' })).toBeInTheDocument();
     // Cancel is offered so the player can still return to the fetched in-progress game.
@@ -56,7 +56,7 @@ describe('GameScreen', () => {
       freshGame({ p1Score: 33, p2Score: 37 }),
     ]);
     const user = userEvent.setup();
-    render(<GameScreen user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
+    render(<GamePage user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
     await screen.findByRole('heading', { name: 'New Game' });
 
     expect(screen.queryByText('33')).not.toBeInTheDocument();
@@ -73,7 +73,7 @@ describe('GameScreen', () => {
       freshGame({ p1Score: 33, p2Score: 37 }),
     ]);
     const user = userEvent.setup();
-    render(<GameScreen user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
+    render(<GamePage user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
     // Dismiss the login-time modal to resume the fetched game first.
     await user.click(await screen.findByRole('button', { name: 'Cancel' }));
     expect(screen.queryByRole('heading', { name: 'New Game' })).not.toBeInTheDocument();
@@ -102,7 +102,7 @@ describe('GameScreen', () => {
       freshGame({ id: 'g2', p1Score: 0, p2Score: 0 }),
     );
     const user = userEvent.setup();
-    render(<GameScreen user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
+    render(<GamePage user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
     await user.click(await screen.findByRole('button', { name: 'Cancel' }));
     await user.click(screen.getByRole('button', { name: 'New Game' }));
     expect(screen.getByText('33')).toBeInTheDocument();
@@ -117,7 +117,7 @@ describe('GameScreen', () => {
     vi.spyOn(gamesApi, 'listInProgressGames').mockResolvedValue([]);
     vi.spyOn(gamesApi, 'createGame').mockResolvedValue(freshGame());
     const user = userEvent.setup();
-    render(<GameScreen user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
+    render(<GamePage user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
     await screen.findByRole('heading', { name: 'New Game' });
 
     await user.click(screen.getByRole('button', { name: "Let's Go!" }));
@@ -132,7 +132,7 @@ describe('GameScreen', () => {
       .spyOn(gamesApi, 'rollGame')
       .mockResolvedValue({ state: freshGame({ version: 4 }), versionConflictRecovered: false });
     const user = userEvent.setup();
-    render(<GameScreen user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
+    render(<GamePage user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
     await user.click(await screen.findByRole('button', { name: 'Cancel' }));
 
     await user.click(screen.getByRole('button', { name: 'Roll' }));
@@ -145,7 +145,7 @@ describe('GameScreen', () => {
       new ApiError('UNAUTHORIZED', 'expired', 401),
     );
     const onSessionExpired = vi.fn();
-    render(<GameScreen user={USER} onSessionExpired={onSessionExpired} onLogout={vi.fn()} />);
+    render(<GamePage user={USER} onSessionExpired={onSessionExpired} onLogout={vi.fn()} />);
 
     await waitFor(() => expect(onSessionExpired).toHaveBeenCalled());
   });
@@ -159,7 +159,7 @@ describe('GameScreen', () => {
       new ApiError('GAME_ABANDONED', 'This game was abandoned before the action was applied.', 409),
     );
     const user = userEvent.setup();
-    render(<GameScreen user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
+    render(<GamePage user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
     await user.click(await screen.findByRole('button', { name: 'Cancel' }));
     await user.click(screen.getByRole('button', { name: 'Roll' }));
 
@@ -173,7 +173,7 @@ describe('GameScreen', () => {
     it('should show the AI seat selector only after choosing the AI opponent', async () => {
       vi.spyOn(gamesApi, 'listInProgressGames').mockResolvedValue([]);
       const user = userEvent.setup();
-      render(<GameScreen user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
+      render(<GamePage user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
       await screen.findByRole('heading', { name: 'New Game' });
 
       expect(screen.queryByLabelText('AI plays seat')).not.toBeInTheDocument();
@@ -188,7 +188,7 @@ describe('GameScreen', () => {
         .spyOn(gamesApi, 'createGame')
         .mockResolvedValue(freshGame({ mode: 'ai', aiSeat: 2 }));
       const user = userEvent.setup();
-      render(<GameScreen user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
+      render(<GamePage user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
       await screen.findByRole('heading', { name: 'New Game' });
 
       await user.selectOptions(screen.getByLabelText('Opponent'), 'ai');
@@ -205,7 +205,7 @@ describe('GameScreen', () => {
     it('should keep player avatars stable while editing the new-game modal fields', async () => {
       vi.spyOn(gamesApi, 'listInProgressGames').mockResolvedValue([]);
       const user = userEvent.setup();
-      render(<GameScreen user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
+      render(<GamePage user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
       await screen.findByRole('heading', { name: 'New Game' });
 
       const avatar1Before = screen.getByAltText("Player 1's avatar").getAttribute('src');
@@ -230,11 +230,11 @@ describe('GameScreen', () => {
         versionConflictRecovered: false,
       });
       const user = userEvent.setup();
-      render(<GameScreen user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
+      render(<GamePage user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
       // The login-time modal pauses the loop until dismissed (see the pause test below).
       await user.click(await screen.findByRole('button', { name: 'Cancel' }));
 
-      // Waits past AI_TURN_THINK_DELAY_MS (GameScreen's deliberate "AI is thinking" pause).
+      // Waits past AI_TURN_THINK_DELAY_MS (GamePage's deliberate "AI is thinking" pause).
       await waitFor(() => expect(aiTurnSpy).toHaveBeenCalledWith('g1', 5), { timeout: 2000 });
     });
 
@@ -247,7 +247,7 @@ describe('GameScreen', () => {
         versionConflictRecovered: false,
       });
       const user = userEvent.setup();
-      render(<GameScreen user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
+      render(<GamePage user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
       await user.click(await screen.findByRole('button', { name: 'Cancel' }));
 
       expect(screen.getByText('Player 1 (AI) is thinking…')).toBeInTheDocument();
@@ -274,7 +274,7 @@ describe('GameScreen', () => {
         versionConflictRecovered: false,
       });
       const user = userEvent.setup();
-      render(<GameScreen user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
+      render(<GamePage user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
       await user.click(await screen.findByRole('button', { name: 'Cancel' }));
 
       await screen.findByText('AI gave up its turn.', {}, { timeout: 2000 });
@@ -291,7 +291,7 @@ describe('GameScreen', () => {
       });
       const aiTurnSpy = vi.spyOn(gamesApi, 'aiTurnGame').mockReturnValueOnce(firstAiTurnPromise);
       const user = userEvent.setup();
-      render(<GameScreen user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
+      render(<GamePage user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
       // Dismiss the login-time modal so the AI auto-turn loop can start at all.
       await user.click(await screen.findByRole('button', { name: 'Cancel' }));
       await waitFor(() => expect(aiTurnSpy).toHaveBeenCalledTimes(1), { timeout: 2000 });

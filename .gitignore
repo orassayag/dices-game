@@ -8,9 +8,6 @@ coverage/
 .DS_Store
 Thumbs.db
 
-# Workflow-owned working drafts — never commit (docs/plans/ holds the finalized output)
-docs/pre-plans/
-
 # Claude Code local/machine-specific state — never commit
 .claude/settings.local.json
 .claude/status/

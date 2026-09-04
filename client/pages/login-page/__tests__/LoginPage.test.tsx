@@ -1,11 +1,11 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { LoginScreen } from '../LoginScreen';
+import { LoginPage } from '../LoginPage';
 import { ApiError } from '../../../api/apiClient';
 import * as authApi from '../../../api/authApi';
 
-describe('LoginScreen', () => {
+describe('LoginPage', () => {
   beforeEach(() => {
     vi.spyOn(authApi, 'fetchCsrfToken').mockResolvedValue(undefined);
   });
@@ -15,7 +15,7 @@ describe('LoginScreen', () => {
   });
 
   it('should disable the submit button until the pre-auth CSRF token is ready', async () => {
-    render(<LoginScreen onAuthenticated={vi.fn()} />);
+    render(<LoginPage onAuthenticated={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Log in' })).toBeDisabled();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Log in' })).toBeEnabled());
@@ -25,7 +25,7 @@ describe('LoginScreen', () => {
     const user = userEvent.setup();
     const onAuthenticated = vi.fn();
     vi.spyOn(authApi, 'login').mockResolvedValue({ user: { id: '1', username: 'alice' } });
-    render(<LoginScreen onAuthenticated={onAuthenticated} />);
+    render(<LoginPage onAuthenticated={onAuthenticated} />);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Log in' })).toBeEnabled());
 
     await user.type(screen.getByLabelText('Username'), 'alice');
@@ -42,7 +42,7 @@ describe('LoginScreen', () => {
     const registerSpy = vi
       .spyOn(authApi, 'register')
       .mockResolvedValue({ user: { id: '2', username: 'bob' } });
-    render(<LoginScreen onAuthenticated={vi.fn()} />);
+    render(<LoginPage onAuthenticated={vi.fn()} />);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Log in' })).toBeEnabled());
 
     await user.click(screen.getByRole('button', { name: 'Sign In' }));
@@ -58,7 +58,7 @@ describe('LoginScreen', () => {
   it('should show a friendly message on invalid credentials', async () => {
     const user = userEvent.setup();
     vi.spyOn(authApi, 'login').mockRejectedValue(new ApiError('INVALID_CREDENTIALS', 'nope', 401));
-    render(<LoginScreen onAuthenticated={vi.fn()} />);
+    render(<LoginPage onAuthenticated={vi.fn()} />);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Log in' })).toBeEnabled());
 
     await user.type(screen.getByLabelText('Username'), 'alice');

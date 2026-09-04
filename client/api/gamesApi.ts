@@ -78,7 +78,7 @@ export async function holdGame(id: string, expectedVersion: number): Promise<Gam
   return await performGameAction(id, () => holdGameOnce(id, expectedVersion));
 }
 
-/** Drives the AI seat one move forward (§9). The caller (GameScreen) re-calls this
+/** Drives the AI seat one move forward (§9). The caller (GamePage) re-calls this
  * while `state.mode === 'ai' && state.currentSeat === state.aiSeat` — the same
  * version-conflict recovery as roll/hold applies here too. */
 export async function aiTurnGame(id: string, expectedVersion: number): Promise<GameActionResult> {

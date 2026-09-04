@@ -83,7 +83,7 @@ export function fallbackAvatarUrl(name: string): string {
 
 /** Resolves what a seat actually shows: the fixed AI bot identity while that seat is
  * played by the AI, otherwise the seat's own human identity. `identity` is never mutated
- * when a seat becomes/stops being AI (GameScreen generates it once per session), so
+ * when a seat becomes/stops being AI (GamePage generates it once per session), so
  * switching a New Game's opponent back to "Human" shows the exact same player as before
  * with no separate "restore" step needed. */
 export function resolveSeatDisplay(identity: PlayerIdentity, isAiSeat: boolean): SeatDisplay {
@@ -94,7 +94,7 @@ export function resolveSeatDisplay(identity: PlayerIdentity, isAiSeat: boolean):
 }
 
 /** Random name + random avatar photo per seat, generated once per browser session (see
- * GameScreen's `useState(() => generatePlayerIdentities())`) so identities stay fixed for
+ * GamePage's `useState(() => generatePlayerIdentities())`) so identities stay fixed for
  * as long as the user is signed in — never reshuffled by editing the New Game modal or by
  * creating additional games. */
 export function generatePlayerIdentities(): PlayerIdentities {

@@ -1,0 +1,451 @@
+claude:
+=======
+
+### ⚠️ Issues Found (21): 3 🟣 | 8 🔴 | 6 🟡 | 2 🔵 | 2 🟠
+
+| # | Category | Severity | Title | Description |
+|---|----------|----------|-------|-------------|
+| I1 | Security | 🟣 Blocker | Turn authorization is undefined — the acting player is client-supplied | The plan says the API validates turns, but never says how the API knows *which* player is acting. With both players in one browser, the obvious implementation is a body/path field: `POST /games/42/roll {"playerId": 1}`. Nothing stops the client from sending `{"playerId": 2}` on player 1's turn, or rolling for the opponent until they bust. The whole "no game logic in the frontend" requirement is void if identity is a client-controlled parameter. |
+| I2 | Architecture | 🟣 Blocker | "Authenticated users" vs "both players on one page" is contradictory | Requirement B3 says only authenticated users can create and play games, and B2a says the API manages player identities. The simulation note says both players share one page. These can't both be satisfied without a decision that is never made: does the browser hold **two** independent sessions (two logins, two tokens), or **one** user who is authorized to act for both seats? Every downstream design — token storage, the turn check in I1, win stats in I11 — depends on this answer, and it is absent. |
+| I3 | Security | 🟣 Blocker | Credential handling is entirely unspecified | "Implement an API with authentication" is the whole of the auth spec. There is no statement about password hashing, token format, expiry, refresh, or where the token is stored. The default a developer reaches for under time pressure is plaintext or SHA-256 passwords and a non-expiring JWT in `localStorage` — which is both a stored-credential leak and an XSS-to-account-takeover path. |
+| I4 | Bug | 🔴 High | Concurrent rolls can corrupt game state — no locking or idempotency | Two rapid clicks on Roll send two `POST /roll` requests. Both read `roundScore = 12`, both add their dice, both write. One roll silently disappears, or worse, a bust and a roll interleave so the round score survives a 6&6. Nothing in the plan mentions optimistic locking, a state version, or request idempotency. |
+| I5 | Correctness | 🔴 High | Win-condition timing is undefined | Rule 6 says the first player to *reach* the winning score wins, but round score only merges into global score on Hold (rule 5a). So: player has global 90, target 100, and rolls to a round score of 12. Do they win immediately, or must they Hold first? Both readings are defensible and they produce different games. The plan never says. |
+| I6 | Security | 🔴 High | The player-set winning score has no validation rules | Rule 7 lets players set the target with no stated constraints. `POST /games {"targetScore": 0}` means the game is won before the first roll; `-10` means it can never be won; `999999999` creates an effectively immortal game row; `"abc"` or `1.5` are unhandled types. |
+| I7 | Correctness | 🔴 High | The 6&6 penalty is ambiguous | Rule 4 says the round score is lost. The linked demo is a variant where double-6 wipes the **global** score, not just the round score — that is the whole point of the variant. As written, a developer will implement `roundScore = 0` and produce a different game from the one in the reference video. The plan also never says whether a *single* 6 does anything. |
+| I8 | Architecture | 🔴 High | AI opponent has no specified execution location | Extra 3 asks for an AI opponent but doesn't say where it runs. If the frontend decides when the AI rolls or holds, that is game logic in the frontend — a direct violation of the stated frontend constraint, and a trivially cheatable one (open devtools, make the AI hold at 3). If it runs server-side, the plan still doesn't say whether an AI turn is one request that loops until hold, or a stepped sequence the UI can animate. |
+| I9 | Correctness | 🔴 High | No game state machine — behavior on finished or abandoned games is undefined | There is no defined set of states (`in_progress`, `finished`, `abandoned`). So: player 2 wins, and player 1 sends `POST /roll` again. Does the API return 409? Does it roll and let the score keep climbing past the target? Does it award a second win? Nothing in the plan answers this, and the naive implementation will happily roll. |
+| I10 | Security | 🔴 High | No rate limiting on login or on roll | The login endpoint is open to unlimited password guessing. The roll endpoint is a write-per-request with no throttle — a loop of `while(true) fetch('/roll')` fills the DB and pins the server. Neither is mentioned anywhere in the plan. |
+| I11 | Correctness | 🔴 High | Win-counter semantics and transactionality are unspecified | Extra 1 asks to track wins per player, but "player" is undefined given I2 — is it a user account, or a seat in a game? If one logged-in user drives both seats, incrementing `user.wins` on every game makes the counter meaningless. Separately, the win increment and the game-finished write must be one transaction; if the process dies between them, the game shows a winner with no recorded win. |
+| I12 | Bug | 🟡 Medium | "New game at any time" has no defined effect on the current game | Rule 8 allows starting a new game mid-game. The plan doesn't say whether the abandoned game is deleted, archived, or left dangling as `in_progress` forever. It also creates a stats loophole: a player who is about to lose starts a new game, and the loss never lands — relevant once I11 is being counted. |
+| I13 | DX | 🟡 Medium | No API error contract | The API must reject "not your turn", "game already finished", "invalid target score", and "not a player in this game" — but no status codes or error body shape are defined. The frontend then can't distinguish a recoverable error from a fatal one, and every developer picks a different code for the same case (403 vs 409 vs 400 for "not your turn"). |
+| I14 | Architecture | 🟡 Medium | Persistence requirement is self-contradictory and has no schema | Extra 2 says "e.g. database or local storage. Use database." The localStorage mention should be struck — it directly conflicts with server-authoritative state, since browser-held state can be edited. Beyond that there is no schema, no choice of engine, and no migration story for `users`, `games`, `game_players`, and `rolls`. |
+| I15 | DX | 🟡 Medium | Tests and observability are not mentioned at all | For a plan whose core value is "the backend enforces the rules," there is no requirement to test the rules. The bust case, the win boundary, and the not-your-turn rejection are exactly the logic that needs unit tests. There is also no logging or request tracing, so a disputed game outcome cannot be reconstructed. |
+| I16 | Bug | 🟡 Medium | The 6&6 action lockout is client-side only | Extra 4 asks to "disable actions briefly" after a double 6. If that's a `setTimeout` in React, a user can re-enable the button or just call the API directly during the window. The lockout is cosmetic; the actual protection has to be that the turn already passed server-side — which the plan doesn't connect. |
+| I17 | Correctness | 🟡 Medium | API response shape is undefined, including the dice faces | The UI must show two dice and animate the bust, so the roll response has to include the individual die values, the new round score, whether a bust occurred, and whose turn it is now. None of this is specified, so the frontend either guesses or the backend under-returns and the client has to re-fetch state after every roll. |
+| I18 | Scale | 🔵 Low | No pagination or aggregation strategy for history and stats | Once games and rolls persist, a "my games" list and a win leaderboard are unbounded queries. A leaderboard built as "fetch all users, then count wins per user" is a textbook N+1. Low impact at interview scale, but it's an unstated design decision. |
+| I19 | DX | 🔵 Low | "Score" is overloaded three ways | The plan uses "round score", "global score", and "winning score" — and the demo UI calls the global one "total". Three different numbers sharing a noun leads to fields like `game.score` that nobody can interpret without reading the implementation. |
+| I20 | Bug | 🟠 Nice to have | Browser autoplay policy will block background music | Extra 5 asks for sound and background music. Chrome and Safari block audio playback that isn't preceded by a user gesture, so music started on page load will silently fail to play in most browsers. |
+| I21 | DX | 🟠 Nice to have | No move log, so games can't be replayed or audited | Storing only current state means a finished game is a single row with a winner. Persisting each roll would make the bust rule debuggable, enable a replay view, and give a natural source for statistics. |
+
+---
+
+### 🛠️ Recommendations
+
+| # | Severity | How to Fix |
+|---|----------|------------|
+| R1 | 🟣 Blocker | Derive the acting player from the auth token, never from the request body. The roll endpoint should take no player parameter at all: `POST /games/:id/roll` with `Authorization: Bearer <token>`, and the handler does `if (game.currentPlayerUserId !== req.auth.userId) return 409 NOT_YOUR_TURN`. |
+| R2 | 🟣 Blocker | Decide the session model explicitly and write it into the plan. Recommended: two real accounts, two tokens held in one React app (`{ p1: token, p2: token }` in memory), and the UI sends the token belonging to whoever's turn it is. This keeps R1 honest and makes I11's stats meaningful. The alternative — one user owning both seats — must then state that seat-level authorization is deliberately not enforced. |
+| R3 | 🟣 Blocker | Specify the auth stack concretely: `bcrypt` (cost ≥ 10) or `argon2id` for passwords, short-lived JWT (15–60 min) signed with a secret from an env var and never committed, token in memory rather than `localStorage`. Add a line to the plan naming each of these so it isn't left to improvisation. |
+| R4 | 🔴 High | Add optimistic concurrency: store a `version` integer on the game, and make every mutation `UPDATE games SET ..., version = version + 1 WHERE id = ? AND version = ?`. Zero rows affected → return 409 and let the client refetch. Wrap read-modify-write in a single transaction. |
+| R5 | 🔴 High | Pick a rule and state it. Recommended (matches the reference demo): the win is only checked on Hold, after `globalScore += roundScore`. Write the condition as `if (globalScore >= targetScore) game.status = 'finished'` — `>=`, not `==`, so overshooting still wins. |
+| R6 | 🔴 High | Validate the target at creation with an explicit schema, e.g. `targetScore: z.number().int().min(10).max(1000).default(100)`, and reject anything else with 400 before a game row is created. |
+| R7 | 🔴 High | State the exact penalty in the plan. Recommended, per the demo: `if (d1 === 6 && d2 === 6) { player.globalScore = 0; player.roundScore = 0; passTurn(); }`. Add a sentence confirming that a single 6 is scored normally. |
+| R8 | 🔴 High | Run the AI entirely server-side and expose it as one endpoint: `POST /games/:id/ai-turn`, which loops the AI's decisions, persists each roll, and returns the ordered list of moves for the client to animate. The frontend's only job is to call it and play back the array. Keep the policy trivial and explicit, e.g. hold at `roundScore >= 20` or when the global score would reach the target. |
+| R9 | 🔴 High | Define a state machine in the plan: `in_progress → finished` and `in_progress → abandoned`, and make every action endpoint start with `if (game.status !== 'in_progress') return 409 GAME_NOT_ACTIVE`. |
+| R10 | 🔴 High | Add rate limits: strict on auth (e.g. 5 login attempts per account per 15 minutes, with lockout backoff), looser on gameplay (e.g. 30 rolls/minute per user). `express-rate-limit` or equivalent is enough here. |
+| R11 | 🔴 High | Define wins as belonging to the **user account**, and increment inside the same transaction that marks the game finished: `UPDATE users SET wins = wins + 1 WHERE id = ?` alongside the game update, one commit. Only count games that reached `finished`, never `abandoned`. |
+| R12 | 🟡 Medium | Make "new game" an explicit transition: `POST /games` sets any of the caller's `in_progress` games to `abandoned` with a timestamp, and abandoned games are excluded from the win/loss stats in R11. |
+| R13 | 🟡 Medium | Publish a fixed error envelope — `{ "error": { "code": "NOT_YOUR_TURN", "message": "..." } }` — and pin the codes: 401 unauthenticated, 403 not a participant, 409 not-your-turn / game-not-active, 400 invalid input, 422 validation failure. |
+| R14 | 🟡 Medium | Delete the localStorage option from the requirement and commit to one engine (SQLite or Postgres) with migrations. Sketch the tables in the plan: `users(id, email, password_hash, wins)`, `games(id, target_score, status, current_player_id, version, winner_id)`, `game_players(game_id, user_id, seat, global_score, round_score)`, `rolls(id, game_id, user_id, die1, die2, created_at)`. |
+| R15 | 🟡 Medium | Require unit tests on the rule engine specifically — bust on 6&6, hold merges and passes turn, win at exactly the target, win above the target, roll rejected when it isn't your turn, roll rejected on a finished game — plus structured request logging with a game id on every action. |
+| R16 | 🟡 Medium | Treat the lockout as animation only. The server passes the turn the instant the bust is recorded, so any request the client sneaks through during the animation window is already rejected by R1's turn check. Note this explicitly so nobody implements the lockout as the enforcement mechanism. |
+| R17 | 🟡 Medium | Pin the roll response shape in the plan, e.g. `{ dice: [6, 6], busted: true, roundScore: 0, globalScores: { p1: 24, p2: 41 }, currentPlayerId: 2, status: "in_progress" }` — enough for the UI to render everything without a follow-up GET. |
+| R18 | 🔵 Low | Paginate list endpoints from the start (`GET /games?limit=20&cursor=...`) and compute the leaderboard as a single aggregate — `SELECT user_id, COUNT(*) FROM games WHERE status='finished' GROUP BY winner_id ORDER BY 2 DESC LIMIT 10` — rather than a per-user loop. |
+| R19 | 🔵 Low | Rename in code and in the plan: `roundScore`, `totalScore`, `targetScore`. Never a bare `score` field anywhere in the schema or API. |
+| R20 | 🟠 Nice to have | Start audio only from a user gesture — kick it off inside the "Start game" click handler, and keep a persistent mute toggle. Don't call `audio.play()` on mount. |
+| R21 | 🟠 Nice to have | Persist every roll in the `rolls` table from R14. It costs one insert per action and gives you replay, debugging, and stats for free. |
+
+---
+
+### 💡 Creative Additions — Ranked by Build Cost
+
+Estimates are the share of one 5-hour Claude session, assuming Opus with the codebase in context. Sorted cheapest first, so you can pick up the low-cost items after the blockers are closed.
+
+| Idea | Cost | What it adds |
+|---|---|---|
+| Dark mode + player color themes | 4% | CSS variables and a toggle. Pure frontend, no API change. |
+| Sound effects + music (with R20's gesture fix) | 6% | Roll, bust, hold, and win cues. Highest perceived polish per token. |
+| Bust animation + brief action lockout (Extra 4) | 8% | Dice shake, red flash, 1.5s disabled state. Already required — this is the cost line for it. |
+| Win-counter leaderboard UI | 10% | Consumes R18's aggregate endpoint. Small component, small query. |
+| Rule variants (single-1 loses, max rolls per turn) | 15% | Store the variant flags on the game row and branch in the rule engine. Cheap because the engine is already centralized. |
+| Best-of-N match mode | 20% | A `matches` table wrapping several games, plus a series scoreboard. |
+| Achievements ("held at 40+", "won from behind") | 20% | Derived from the roll log in R21; nearly free once that exists. |
+| E2E test suite (Playwright, full game happy path + bust + win) | 25% | The highest-value non-feature item on this list given I15. |
+| Game history + replay viewer | 28% | Steps through the `rolls` table. Depends on R21 shipping first. |
+| AI opponent, server-side, three difficulty tiers | 40% | R8's endpoint plus tuned hold thresholds and a "thinking" delay for feel. |
+| LLM-powered trash-talking commentator | 35% | One short call per turn summarizing the roll in character. Needs its own rate limit and a graceful fallback to canned lines when the call fails or is slow — never block the turn on it. |
+| Real cross-browser multiplayer (WebSockets, lobby, reconnect) | 70% | Explicitly out of scope per the brief. Costed here only so the tradeoff is visible: it's the single most expensive item and buys nothing the assignment asks for. |
+
+---
+
+### Overall Verdict
+
+🟡 Revise before proceeding
+
+gpt:
+====
+
+### ⚠️ Issues Found (14): 2 🟣 | 5 🔴 | 4 🟡 | 2 🔵 | 1 🟠
+
+| # Category Severity Title Description |               |            |                                                                |                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------- | ------------- | ---------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| I1                                    | Security      | 🟣 Blocker | Real production payloads can leak secrets and sensitive data   | The plan explicitly stores real payloads inside TypeScript files in `src/incidents/`. There is no defined redaction policy, secret detection, ownership rule, or review requirement. A captured payload such as `{ "authorization": "Bearer ey..." }` could be committed to Git and remain in repository history even after deletion.                                            |
+| I2                                    | Security      | 🟣 Blocker | The plan does not define who is allowed to see incidents       | The goal says “Let anyone open Cosmos” while the incidents contain real production data. The plan does not say whether Cosmos is public, internal-only, or protected by existing authentication. If Cosmos is accessible to external users, a user could potentially inspect production customer payloads.                                                                       |
+| I3                                    | Correctness   | 🔴 High    | “Exact path” is not guaranteed by manually curated data        | The feature promises to show the “exact path” of the failing request, but the recording process is manual: someone copies steps from an existing scenario and replaces the payloads. That can produce an accurate-looking path that differs from what actually happened in production.                                                                                           |
+| I4                                    | Architecture  | 🔴 High    | Incident schema compatibility with scenarios is underspecified | The plan says `Incident` should extend or closely mirror existing scenario types, but does not define which fields are shared, which are incident-specific, or how the player distinguishes them. A future change to the scenario schema could silently break old incident recordings.                                                                                           |
+| I5                                    | Bug           | 🔴 High    | Historical incidents can break when the application changes    | Incidents are TypeScript source files but are described as frozen historical recordings. If service names, step types, payload schemas, or rendering assumptions change, an old incident may no longer load or render correctly. The plan has no schema versioning or backward-compatibility strategy.                                                                           |
+| I6                                    | Scale         | 🔴 High    | Large payloads can make the frontend bundle grow indefinitely  | Every incident is added to the application source tree and discovered by the app. If dozens of incidents contain large request/response payloads, the generated bundle or loading time can become much larger. The plan does not define payload-size limits, lazy loading, or a maximum incident size.                                                                           |
+| I7                                    | Security      | 🔴 High    | Incident URLs can become an unsafe data-exposure path          | The plan allows links to original logs or tickets to be stored as plain-text URLs. It does not define whether these URLs are internal-only, whether they may contain sensitive query parameters, or how they are rendered. For example, a URL containing `?token=...` could expose a credential to anyone viewing the incident.                                                  |
+| I8                                    | Bug           | 🔴 High    | No behavior is defined for missing or malformed incident files | The loader is expected to discover all files under `src/incidents/`, but there is no validation or failure behavior. One malformed incident could cause the entire incident list to fail to load, or an invalid step could crash the player.                                                                                                                                     |
+| I9                                    | Correctness   | 🟡 Medium  | Incident ordering and identity are underspecified              | The UI is sorted by date, but the plan does not define a stable unique ID or what happens when two incidents have the same date/title. The suggested deep link uses a slug, but no uniqueness or collision rule is defined.                                                                                                                                                      |
+| I10                                   | Correctness   | 🟡 Medium  | A single incident model may not represent cascades clearly     | The goal explicitly includes a failing request “or cascade,” but the plan only describes a list of hops from service to service/topic. It does not define branching, parallel requests, retries, loops, or multiple affected requests. A cascade such as `A → B → C` plus `B → D` cannot be represented clearly unless the existing scenario model already supports branching.   |
+| I11                                   | DX            | 🟡 Medium  | The 10–30 minute creation target is not supported by tooling   | The plan expects someone to manually inspect logs, copy steps, redact payloads, and create a valid TypeScript file using only a text editor. The time estimate is therefore dependent on incident complexity and manual work that is not measured or validated.                                                                                                                  |
+| I12                                   | Observability | 🟡 Medium  | There is no validation that an incident recording is complete  | The success criteria say users should see the real path and real payloads, but there is no automated check that every hop has a payload, timestamps are consistent, service names exist, or the path is connected. A recording could compile while still being incomplete.                                                                                                       |
+| I13                                   | Security      | 🔵 Low     | No repository-history cleanup strategy is defined              | Even if a contributor notices sensitive data after committing it, deleting the payload from the current TypeScript file does not remove it from Git history. Because the feature intentionally introduces production-derived data into source control, the plan should define what happens after accidental exposure.                                                            |
+| I14                                   | DX            | 🔵 Low     | Incident naming and metadata conventions are too loose         | The plan only specifies a short title, approximate date/time, and note. There is no required incident ID, severity, affected services, status, or owner. Two recordings can therefore describe the same incident differently and become difficult to maintain later.                                                                                                             |
+
+### 🛠️ Recommendations
+
+| # Severity How to Fix |            |                                                                                                                                                                                                                                                                                                                                                                                      |
+| --------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| R1                    | 🟣 Blocker | Define a strict redaction policy before implementation. Never allow secrets, auth headers, cookies, tokens, customer identifiers, payment data, or other sensitive production data in incident files. Add automated secret scanning and CI validation. Example: reject an incident containing keys matching `authorization`, `cookie`, `token`, `password`, or known secret formats. |
+| R2                    | 🟣 Blocker | Explicitly define the access model. If Cosmos is internal, state that incidents are internal-only and rely on the existing authentication boundary. If Cosmos is public, do not put real production payloads in the client-side source at all.                                                                                                                                       |
+| R3                    | 🔴 High    | Change the wording and data model so the recording represents a **curated reconstruction of the production path**, unless the system can prove it is exact. Add source metadata such as `source: "production-log"` and optionally a list of evidence references for each hop.                                                                                                        |
+| R4                    | 🔴 High    | Define a versioned incident schema instead of loosely extending the scenario type. Example: `type Incident = { schemaVersion: 1; id: string; metadata: ...; steps: IncidentStep[] }`. Keep incident parsing separate from the normal scenario model and convert both into the player's internal format.                                                                              |
+| R5                    | 🔴 High    | Make historical recordings backward compatible. Store `schemaVersion` in every incident and keep a small migration/adapter layer. Example: `loadIncident(file) → migrateIncident(file.schemaVersion) → playerModel`.                                                                                                                                                                 |
+| R6                    | 🔴 High    | Add payload limits and lazy loading. Do not automatically put every incident and its full payload into the initial application bundle. Example: load the incident index first, then dynamically import the selected incident only after the user clicks it.                                                                                                                          |
+| R7                    | 🔴 High    | Treat external references as untrusted metadata. Validate URLs and prohibit credentials/query tokens in them. Prefer identifiers such as `ticketId: "INC-1234"` over storing authenticated log URLs directly.                                                                                                                                                                        |
+| R8                    | 🔴 High    | Add isolated validation for each incident. One invalid file should not prevent valid incidents from loading. Example: `try { parseIncident(file) } catch { markIncidentInvalid(id); continue; }`. Show a useful development-time error containing the incident filename and validation failure.                                                                                      |
+| R9                    | 🟡 Medium  | Give every incident a stable unique ID independent of its title/date. Example: `id: "payment-cascade-2026-03-12"` and use that ID for sorting-independent deep links such as `?incident=<id>`.                                                                                                                                                                                       |
+| R10                   | 🟡 Medium  | Explicitly define the graph model needed for cascades. If the existing player supports branching, reuse that model. Otherwise add something like `edges: [{ from: "payment", to: "orders" }]` rather than assuming a simple linear hop list is sufficient.                                                                                                                           |
+| R11                   | 🟡 Medium  | Add a small incident authoring/validation command instead of relying entirely on a text editor. Example: `pnpm validate:incidents` checks schema, duplicate IDs, missing services, invalid payloads, and sensitive fields before commit.                                                                                                                                             |
+| R12                   | 🟡 Medium  | Add automated completeness checks. Require every step to reference a valid service/topic, every edge to connect valid nodes, and every recorded hop to contain the fields required by the player. Make these checks part of CI.                                                                                                                                                      |
+| R13                   | 🔵 Low     | Add a documented incident-response procedure for accidental sensitive-data commits. For example: immediately remove the file, revoke exposed credentials, and purge the secret from Git history rather than treating a normal commit as sufficient cleanup.                                                                                                                          |
+| R14                   | 🔵 Low     | Define a standard metadata shape. Example: `id`, `title`, `startedAt`, `severity`, `affectedServices`, `summary`, `schemaVersion`, and `steps`. This makes incidents consistent without adding significant complexity.                                                                                                                                                               |
+
+### 💡 New Ideas / Creative Additions — Claude 5h Token Budget
+
+| Idea                                                                                                       | Estimated Claude 5h session usage | Why it is useful                                                                                                                                           |
+| ---------------------------------------------------------------------------------------------------------- | --------------------------------: | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Incident timeline** — show timestamps/durations between hops                                             |                              ~10% | Makes the replay much closer to an actual incident investigation and helps explain where latency or retries occurred.                                      |
+| **Failure-point highlighting** — mark the first failed hop and downstream effects                          |                           ~10–15% | Immediately answers “where did things actually start going wrong?” instead of making users inspect every step.                                             |
+| **Incident metadata panel** — severity, affected services, root cause, resolution                          |                              ~10% | Turns the replay into a lightweight interactive post-mortem rather than only a visual animation.                                                           |
+| **Retry / timeout visualization** — show retries as repeated or branching paths                            |                           ~15–20% | Particularly valuable for understanding cascades where the important behavior is not just `A → B → C`, but `A → B → retry → retry → C`.                    |
+| **Incident comparison mode** — compare two recordings or “before vs fixed”                                 |                           ~25–30% | Could become a strong debugging/learning feature, but it is substantially more work because it requires graph alignment and meaningful visual differences. |
+| **Incident authoring validator UI** — paste/create an incident and immediately see schema/redaction errors |                           ~25–35% | Directly addresses the biggest manual-authoring risk while making the proposed 10–30 minute workflow much more realistic.                                  |
+| **Production evidence links per hop**                                                                      |                           ~15–20% | Lets the viewer understand why a recorded hop exists without putting raw logs into the repository.                                                         |
+| **Incident search/filtering** — service, date, severity, keyword                                           |                           ~15–20% | Becomes increasingly valuable once the incident library grows beyond a handful of recordings.                                                              |
+
+**Overall assessment:** the core idea fits the existing architecture well—the plan correctly aims to reuse the existing player rather than build a second playback system.  However, putting real production payloads into source control without first defining data protection and access boundaries is a **fundamental blocker**. The plan should also distinguish a manually reconstructed incident from a provably exact production trace.
+
+🔴 Do not proceed
+
+
+gemini:
+=======
+
+⚠️ Issues Found (7): 1 🟣 | 2 🔴 | 2 🟡 | 1 🔵 | 1 🟠
+
+| # | Category | Severity | Title | Description |
+| --- | --- | --- | --- | --- |
+| I1 | Security | 🟣 Blocker | Missing Session Context & Multi-User State Isolation | The plan specifies simulating different users on the same page with API authentication, but underspecifies how player identity is bound to game turns. An authenticated player could send roll/hold requests acting as their opponent if authorization isn't strictly validated per turn. For example, `POST /game/:id/roll` without checking if `req.user.id === game.activePlayerId` allows Player 1 to execute moves for Player 2. |
+| I2 | Bug | 🔴 High | Double-6 Loss Edge Case Logic | Rule 4 states rolling double 6s resets the round score and passes the turn, but the plan does not specify whether global score persists or is wiped, nor does it specify atomic state transitions during rapid clicks. For example, if a client fires two rapid `POST /roll` requests while the backend is processing a 6 & 6 result, the second request could incorrectly roll for the next player before they acknowledge the turn switch. |
+| I3 | Correctness | 🔴 High | Underspecified AI Opponent Turn Orchestration | The requirement requests an AI opponent, but the plan lacks an API polling or event mechanism to drive AI turns. Since all game logic lives on the backend, calling `POST /hold` by Player 1 must either synchronously execute the AI's entire turn loop on the server or expose a turn execution endpoint, otherwise the game state will stall indefinitely waiting for the AI to move. |
+| I4 | Architecture | 🟡 Medium | Client-Driven Winning Score Mutation During Active Game | Rule 7 allows setting the winning score, but the plan does not define state lock rules once a game starts. For example, a player sending `PATCH /game/:id { winningScore: 5 }` mid-game when their current score is 10 would immediately trigger a false win state without completing the active round logic. |
+| I5 | Scale | 🟡 Medium | Unbounded Game State Accumulation & Missing Database Cleanup | Persisting every game session, action log, and win tracker in the database without pagination or state cleanup strategies will lead to degraded query performance over time. For example, `GET /games/history` fetching all unpaginated past games for a user will cause high memory usage and database load as historical records grow. |
+| I6 | DX | 🔵 Low | Underspecified Media State Sync for Double-6 UI Delay | Rule Extra-4 requires disabling actions briefly and showing messages on double 6s, but the spec does not define how backend state synchronization interacts with frontend timer animations. For example, if the API immediately returns `activePlayerId: player2`, the React app will re-render Player 2's UI before the 2-second double-6 animation on Player 1's view completes. |
+| I7 | DX | 🟠 Nice to have | Sound Effect Asset Management & Audio Context Block | The requirement includes adding sound effects and background music without specifying asset loading strategies or handling browser auto-play policies. Browsers block un-prompted audio context activation before initial user gesture interactions. |
+
+---
+
+🛠️ Recommendations
+
+| # | Severity | How to Fix |
+| --- | --- | --- |
+| R1 | 🟣 Blocker | Add explicit turn authorization middleware on game actions. Example: `if (game.activePlayerId !== req.user.id) throw new ForbiddenException("Not your turn");` |
+| R2 | 🔴 High | Implement atomic transitions and clear double-6 state resets. Example database transaction update: `UPDATE game SET round_score = 0, active_player_id = next_player_id WHERE id = game_id AND active_player_id = current_player_id;` |
+| R3 | 🔴 High | Implement an automatic AI strategy loop triggered immediately after a turn transfers to the AI player. Example backend handler: `if (nextPlayer.isAi) { await executeAiTurnLoop(gameId); }` |
+| R4 | 🟡 Medium | Enforce immutable winning score once game status transitions from `LOBBY` to `IN_PROGRESS`. Example schema rule: `z.object({ winningScore: z.number().int().min(10).max(1000) }).strict()` allowed only on `POST /games/create`. |
+| R5 | 🟡 Medium | Add cursor-based pagination for history routes and set indexing on active sessions. Example query: `SELECT * FROM games WHERE user_id = :userId ORDER BY created_at DESC LIMIT 20 OFFSET :offset`. |
+| R6 | 🔵 Low | Include an explicitly structured payload property `lastActionEffect: "DOUBLE_SIX_PENALTY"` from the API response so the React UI can freeze input controls and display client-side transition animations before requesting updated status. |
+| R7 | 🟠 Nice to have | Wrap audio triggers inside an explicit user-gesture listener hook (e.g., initializing `AudioContext` on the first "Start Game" or "Roll" button click). |
+
+---
+
+🎮 Creative Additions (Sorted by Claude 5-Hour Token Budget)
+
+* **Local Pass & Play vs. Registered Duel Mode** (*~5% of 5h session*): Add simple multi-identity switching in the UI header to easily simulate two local players without re-logging.
+* **Sound & Haptic Feedback Engine** (*~15% of 5h session*): Synthesize Web Audio API sound effects for dice rolls, holding points, and double-6 busts without needing external MP3 media assets.
+* **Interactive AI Difficulty Levels** (*~35% of 5h session*): Provide customizable AI heuristics on the backend—such as Risk-Averse (holds at 15 points), Aggressive (holds at 30 points), and Dynamic (adjusts target hold score based on opponent's global score).
+* **Live Match Analytics & Game Statistics** (*~50% of 5h session*): Add database aggregate tracking to output end-of-game dashboards showing total rolls, average score per turn, double-6 frequency, and win/loss ratios.
+* **Full Multi-Agent AI vs. AI Simulation Mode** (*~75% of 5h session*): Implement automated background AI matches with speed-slider controls allowing users to spectate full games driven entirely by backend agents.
+
+---
+
+Overall Verdict
+
+🔴 Do not proceed
+
+preflexity:
+===========
+
+⚠️ Issues Found (20): 4 🟣 | 9 🔴 | 5 🟡 | 2 🔵
+
+| # | Category | Severity | Title | Description |
+| --- | --- | --- | --- | --- |
+| I1 | Security | 🟣 Blocker | Authentication is not defined | The plan requires authentication but does not specify the identity model, login flow, password handling, session mechanism, token storage, expiration, or logout behavior. A developer could implement plaintext passwords, non-expiring tokens, or trust a client-supplied player ID. |
+| I2 | Security | 🟣 Blocker | The random dice source is unspecified | Dice outcomes determine the winner, but the plan does not require a cryptographically secure or server-controlled random source. If the client can influence the result, a user can submit a request such as `POST /games/:id/roll {"dice":[6,6]}` and manipulate the game. |
+| I3 | Architecture | 🟣 Blocker | Game state consistency is unspecified | The plan does not define how concurrent actions are serialized. Two requests can both observe the same turn and both succeed, causing duplicate rolls or duplicate holds. |
+| I4 | Correctness | 🟣 Blocker | The game rules are incomplete | The plan does not define valid winning-score limits, whether a player may hold before rolling, whether a double six is the only bust condition, or what happens if a roll reaches the target. For example, `winningScore: -1` or `winningScore: 0` could create an immediately finished game. |
+| I5 | Security | 🔴 High | Authorization boundaries are missing | “Authenticated users can create and play games” does not state which authenticated user may read, roll, hold, restart, or modify a game. Without ownership or membership checks, one user may call `POST /games/other-game/roll`. |
+| I6 | Security | 🔴 High | Input validation is underspecified | The plan names validation but does not define schemas for usernames, game IDs, winning scores, action bodies, or pagination/filter parameters. Inputs such as `winningScore: 1e309`, an invalid UUID, or an oversized username may reach application or database code. |
+| I7 | Security | 🔴 High | Abuse controls are absent | Authentication endpoints and game actions have no rate limiting, lockout, request-size limits, or replay protection. An attacker could brute-force login credentials or send thousands of roll requests. |
+| I8 | Security | 🔴 High | Sensitive data handling is not defined | The plan does not state whether passwords, tokens, logs, or database backups contain sensitive data, nor how secrets are supplied. Logging an `Authorization` header or password during login would expose credentials. |
+| I9 | Bug | 🔴 High | Double-submit behavior is undefined | Network retries are common. If a client retries `POST /games/:id/hold` after a timeout, the server may apply the hold twice unless actions are idempotent or rejected after the first state transition. |
+| I10 | Bug | 🔴 High | Restart semantics are ambiguous | “Start a new game at any time” does not say whether the old game is closed, whether a new game ID is returned, whether the current players carry over, or whether a finished game can be restarted. A refresh or double-click could create multiple active games. |
+| I11 | Correctness | 🔴 High | Turn and terminal-state rules are incomplete | The API must reject roll and hold actions when it is not the caller’s turn or when the game is finished, but the plan does not define error behavior or state transitions. For example, a player could roll after another player has already won if the terminal check is missing. |
+| I12 | Correctness | 🔴 High | Win accounting is not specified | The extra asks to track wins but does not define when the counter increments or how duplicate requests are prevented. A retried winning hold could increment the winner’s count twice. |
+| I13 | Scale | 🔴 High | No state-storage or query strategy is defined | The plan requires a database but does not specify the schema, indexes, transaction boundaries, retention, or how game history is stored. A game-list endpoint without pagination can become an unbounded query. |
+| I14 | DX | 🔴 High | API contract is missing | There are no endpoint names, request and response schemas, status codes, error format, or state representation. Frontend and backend developers would have to infer incompatible contracts. |
+| I15 | Architecture | 🟡 Medium | Authentication and game identity responsibilities are mixed | The plan says the backend manages identities and game state but does not separate authentication, authorization, player membership, and game-session responsibilities. This encourages route handlers to contain unrelated security and game logic. |
+| I16 | Correctness | 🟡 Medium | Player and game lifecycle is unclear | It is not defined how two users join the same game, whether a game can start with one player, or whether a player can leave. The “same page” simulation does not remove the need for a server-side membership model. |
+| I17 | Bug | 🟡 Medium | Client action timing is treated as a rule | The animation requirement says to disable actions briefly after double six. A client-side delay is not enforcement. If the API does not transition the turn immediately, a request sent during the animation can produce inconsistent behavior. |
+| I18 | Correctness | 🟡 Medium | AI behavior and authority are unspecified | The plan does not define whether the AI acts through the same API, who triggers it, or how its decisions are protected from client manipulation. A browser-controlled AI result would allow the client to choose the opponent’s rolls or holds. |
+| I19 | DX | 🟡 Medium | Testing requirements are absent | No unit, integration, API, concurrency, authentication, or frontend contract tests are required. Important cases such as double six, hold-at-target, unauthorized access, and duplicate requests can therefore regress silently. |
+| I20 | Observability | 🔵 Low | Operational visibility is missing | The plan does not require structured logs, request IDs, audit events, health checks, or metrics. Diagnosing “the game changed twice” or investigating suspicious roll patterns would be difficult. |
+| I21 | Product | 🔵 Low | Accessibility and failure states are omitted | The frontend requirements do not cover keyboard use, screen-reader labels for dice, reduced motion, loading states, or API errors. A user who cannot see the animation may not understand that the turn changed. |
+| I22 | Product | 🟠 Nice to have | Creative additions have no selection criteria | The extra list mixes persistence, AI, animation, audio, and open-ended ideas without defining priority or acceptance criteria. This can cause time to be spent on sound effects while core authentication and rule correctness remain incomplete. |
+
+🛠️ Recommendations
+
+| # | Severity | How to Fix |
+| --- | --- | --- |
+| R1 | 🟣 Blocker | Define an authentication design before implementation: use a password-hashing library such as Argon2id, short-lived access tokens or secure HttpOnly cookies, token expiry, logout, and refresh behavior. Never accept a player identity from the request body as the authenticated identity. |
+| R2 | 🟣 Blocker | Generate both dice exclusively on the backend with a server-side secure random source, for example `die1 = crypto.randomInt(1, 7)` and `die2 = crypto.randomInt(1, 7)`. Return the generated values in the response and reject any client-supplied dice values. |
+| R3 | 🟣 Blocker | Make every state transition atomic. Use a database transaction with a row lock or optimistic version check: `UPDATE games SET version = version + 1 ... WHERE id = ? AND version = ? AND current_player_id = ?`. Return `409 Conflict` when the version or turn is stale. |
+| R4 | 🟣 Blocker | Define and validate the rule contract. For example, require `winningScore: z.number().int().min(1).max(100000)`, reject hold-before-roll if that is the intended rule, define whether reaching the target during a roll wins immediately, and explicitly define the double-six transition. |
+| R5 | 🔴 High | Add authorization checks based on membership: `game.player1Id === auth.userId || game.player2Id === auth.userId`. Apply the same check to game reads, actions, restart, and history endpoints; return `403` or a deliberately indistinguishable `404` for inaccessible games. |
+| R6 | 🔴 High | Define request schemas with strict parsing. Reject unknown fields where appropriate, constrain IDs and strings, and validate every route parameter and body with a shared schema such as `RollRequest = z.object({}).strict()`. |
+| R7 | 🔴 High | Add rate limits and abuse controls. Rate-limit login and game actions per user and IP, cap request bodies, use generic login errors, and add temporary lockout or progressive delays after repeated failures. |
+| R8 | 🔴 High | Specify secret and sensitive-data handling: environment or secret-manager configuration, Argon2id password hashes, TLS in deployment, redaction of `Authorization`, cookies, passwords, and database credentials, and encrypted backups where applicable. |
+| R9 | 🔴 High | Add idempotency or state-transition keys to mutating requests. For example, accept `Idempotency-Key`, store the resulting response for that user/game/action, and return the same response on a retry instead of applying the action again. |
+| R10 | 🔴 High | Define restart as an explicit transition. Example: `POST /games/:id/restart` closes the old game with `endedReason: "restarted"`, creates one new game with a new ID, preserves the selected players, and is protected by an idempotency key. |
+| R11 | 🔴 High | Specify a standard error contract and terminal-state enforcement: `{ "code": "NOT_YOUR_TURN", "message": "It is Player 2's turn" }`. Reject actions for `finished`, `restarted`, or `abandoned` games before changing any state. |
+| R12 | 🔴 High | Increment wins in the same transaction that marks the game finished. Enforce a unique winning transition, such as `UPDATE games ... WHERE status = 'ACTIVE'`, then update the player’s counter only if exactly one game row changed. |
+| R13 | 🔴 High | Define a normalized schema and indexes. Store current game state in `games`, player totals in `player_stats`, and optional rolls in `game_events`; index `games(player1_id)`, `games(player2_id)`, and `games(status, updated_at)`. Paginate any history or game-list endpoint. |
+| R14 | 🔴 High | Publish an API contract before coding. Define routes such as `POST /auth/login`, `POST /games`, `GET /games/:id`, `POST /games/:id/roll`, `POST /games/:id/hold`, and `POST /games/:id/restart`, including schemas, status codes, errors, and an OpenAPI document. |
+| R15 | 🟡 Medium | Split the backend into modules: `auth` for identity and sessions, `games` for membership and lifecycle, `game-engine` for pure rule transitions, and `persistence` for transactions. Keep the engine independent of HTTP and database code. |
+| R16 | 🟡 Medium | Define a game lifecycle and membership model. Require exactly two players before starting, or explicitly support a waiting state; store `createdBy`, `player1Id`, `player2Id`, `status`, and join/leave rules. Return the canonical game ID after creation or joining. |
+| R17 | 🟡 Medium | Treat the animation as presentation only. The backend should immediately set `roundScore` to zero and switch `currentPlayerId` after double six; the frontend may disable controls while displaying the returned event. |
+| R18 | 🟡 Medium | Run AI decisions on the backend using the same game-engine commands as human actions. Store `playerType: "AI"` and a server-side policy such as `holdAtScore: 20`; never accept an AI roll or decision from the browser. |
+| R19 | 🟡 Medium | Add a test matrix before implementation: pure rule tests for every transition, API tests for auth and authorization, database transaction tests, retry and concurrent-action tests, and a frontend contract test using mocked API responses. |
+| R20 | 🔵 Low | Add structured observability with `requestId`, `gameId`, `userId`, action type, transition result, and latency. Redact secrets, add `/health` and `/ready` endpoints, and emit an audit event for login failures, game creation, restarts, and wins. |
+| R21 | 🔵 Low | Define accessible UI states: labelled dice and scores, keyboard-accessible Roll and Hold buttons, visible loading and error states, `aria-live` announcements for turn changes, and a `prefers-reduced-motion` alternative to the double-six animation. |
+| R22 | 🟠 Nice to have | Prioritize extras by the 5-hour Claude subscription budget: AI opponent — 75% of one 5-hour session; win statistics — 35%; double-six animation — 20%; database persistence — 50%; sound effects — 15%; creative additions — 10%. Implement only after the core contract, security, and rule tests pass. |
+
+🔴 Do not proceed
+
+Creative Features (prioritized by 5h Claude session budget)
+Use this as an ordered backlog. Implement only after the core game contract, security, and rule tests are passing.
+
+Priority	Feature	Approx. budget (of one 5h Claude session)	What it adds	Acceptance criteria (examples)
+1	AI opponent (server-side)	75%	A second player controlled by the backend using a simple policy (e.g., hold at 20).	- playerType: "AI" stored on the player record.
+- After a human roll/hold, the backend may auto-trigger AI actions via the same game-engine functions.
+- All AI decisions come from server logic; no AI parameters accepted from the client.
+2	Database persistence (games + wins)	50%	Games and win counts survive server restarts.	- games table with status, scores, players, timestamps.
+- player_stats table with wins counter.
+- New game creation and win updates use transactions; data survives restart.
+3	Win statistics UI	35%	Shows how many times each player has won.	- Frontend displays wins next to each player name.
+- Value updates only when a game ends and the server increments the counter.
+4	Double-six animation & lock	20%	Visual feedback when a player busts on 6 & 6.	- On double six, backend sets roundScore = 0 and switches turn immediately.
+- Frontend disables Roll/Hold for ~1–2s and shows a message/animation tied to the server event.
+5	Sound effects / background music	15%	Audio cues for roll, hold, win, and bust.	- Sounds play only after successful API responses.
+- Mute toggle and prefers-reduced-motion/no-sound mode supported.
+6	Game history / replay list	25%	List of past games with basic details.	- GET /games?userId=...&status=FINISHED returns paginated list.
+- Each row shows opponent, final scores, winner, and date.
+7	Custom hold-at score (for AI or hints)	10%	Lets users choose an AI hold threshold or see a suggested hold line.	- Stored as aiHoldAt on the player or game.
+- Server uses this value in AI decisions; invalid values are rejected by schema.
+8	“Quick rematch” after a win	15%	One-click restart with same players.	- POST /games/:id/rematch creates a new game with same players, closes the old one, and is protected by idempotency.
+9	Accessible UI enhancements	20%	Better keyboard, screen-reader, and reduced-motion support.	- All actions reachable by keyboard.
+- Dice and scores have accessible labels.
+- Turn changes announced via aria-live.
+10	Themed UI / custom dice visuals	10%	Cosmetic skins for dice and board.	- Theme selection stored per user or session.
+- Visual changes do not affect game logic or timing.
+
+grok:
+=====
+
+⚠️ Issues Found (18): 4 🟣 | 7 🔴 | 5 🟡 | 2 🔵
+
+```
+| #  | Category     | Severity   | Title                                      | Description |
+|----|--------------|------------|--------------------------------------------|-------------|
+| I1 | Security     | 🟣 Blocker | No auth mechanism specified                | Plan says "Implement an API with authentication" and "Only authenticated users can create and play games" but gives zero detail on how. No mention of JWT, sessions, OAuth, password hashing, token expiry, or how the frontend sends credentials. Example: without this, anyone can POST /games and claim to be any player. |
+| I2 | Security     | 🟣 Blocker | No input validation or schema defined      | Game actions (roll, hold, set winning score, new game) have no request/response contracts. Winning score could be negative, zero, or huge. Example: POST /games/{id}/hold with no body or malformed player identity passes and corrupts state. |
+| I3 | Architecture | 🟣 Blocker | Game state model completely missing        | No description of the data model for a game: players, current turn, round score, global scores, winning score, status (in_progress/finished), dice values, winner. Without this the backend cannot enforce rules consistently. Example: how does the server know whose turn it is after a hold? |
+| I4 | Correctness  | 🟣 Blocker | Dice roll randomness and double-6 rule underspecified | Backend must generate the two dice values. Plan never states that the server (not the client) rolls the dice, nor what happens to the round score on 6+6 beyond "lost". Example: client could send dice=[6,6] itself and force a loss, or dice=[1,1] every time. |
+| I5 | Security     | 🔴 High    | No authorization between players           | Even with auth, nothing prevents Player A from calling roll/hold on a game where it is Player B's turn, or creating games as both players. Example: authenticated user "alice" issues POST /games/42/roll while currentTurn=player2. |
+| I6 | Bug          | 🔴 High    | Race / concurrent action handling absent   | Multiple rapid clicks or parallel requests for the same turn are possible. Plan has no locking, optimistic versioning, or "action already processed" guard. Example: two simultaneous "hold" requests both add the round score. |
+| I7 | Architecture | 🔴 High    | No API surface defined                     | Zero endpoints, HTTP methods, status codes, or error shapes listed. Frontend cannot be built against an unspecified contract. Example: is it POST /games/:id/roll or POST /actions with {type:"roll"}? |
+| I8 | Correctness  | 🔴 High    | Winning-score check timing and edge cases missing | When exactly is the win checked — after hold only, or also after a roll that somehow affects global score? What if both players would reach the target on the same hold? Default 100 is stated but change mid-game is not forbidden. |
+| I9 | Scale / DX   | 🔴 High    | Persistence choice and schema undefined    | "Use database" is stated with no technology, tables, migrations, or connection strategy. Local storage is mentioned then contradicted. Example: without a Game and User table design, win tracking and multi-game support cannot be implemented correctly. |
+| I10| Security     | 🔴 High    | Secrets and CORS / origin policy omitted   | No guidance on where JWT secrets, DB credentials, or CORS allow-list live. Frontend and backend are separate; missing CORS config blocks the React app. |
+| I11| Architecture | 🔴 High    | Frontend must hold zero game logic but simulation of two users is required | Plan says "simulate the different users on the same page" while also forbidding any game logic in the frontend. How the same browser switches identity (two tokens? shared session?) is undefined and will leak logic or credentials. |
+| I12| Bug          | 🟡 Medium  | New-game behavior underspecified           | "A player can start a new game at any time" — does this abandon the current game, archive scores, reset win counts, or create a parallel game? What happens to the other player's in-progress turn? |
+| I13| Correctness  | 🟡 Medium  | Hold after double-6 not addressed          | After rolling 6+6 the turn passes and round score is lost. Can the player still press Hold in the same response cycle? Plan does not say the server must reject Hold when roundScore is already zeroed by a double-6. |
+| I14| DX           | 🟡 Medium  | No error model or observability            | No list of domain errors (NotYourTurn, GameAlreadyFinished, InvalidWinningScore, Unauthenticated). Frontend cannot show meaningful messages; backend has no structured logging or request-id. |
+| I15| Architecture | 🟡 Medium  | AI opponent left as pure extra with no interface | Extra item "Add an AI opponent" has no strategy (random, greedy, target-score), no indication whether AI is a second authenticated user or a server-side actor, and no turn-timer. |
+| I16| Scale        | 🟡 Medium  | No pagination or game listing limits       | Users can create unbounded games. No endpoint to list a user's active/finished games with limit/offset, risking unbounded queries. |
+| I17| DX           | 🔵 Low     | Naming and project structure absent        | No suggested folder layout, language/runtime (Node/Express, FastAPI, etc.), or test strategy. Interviewers will struggle to evaluate consistency. |
+| I18| Correctness  | 🔵 Low     | Sound/animation extras have no backend hook| Double-6 disable + message is frontend-only; backend still needs to return a distinct event/flag so the UI knows to animate. Plan does not require such a flag. |
+```
+
+🛠️ Recommendations
+```
+| #  | Severity   | How to Fix |
+|----|------------|------------|
+| R1 | 🟣 Blocker | Choose one auth scheme and document it fully. Example: JWT with bcrypt-hashed passwords, endpoints POST /auth/register, POST /auth/login returning {accessToken, userId}. Protect every game route with Bearer middleware. Store only hashed passwords. |
+| R2 | 🟣 Blocker | Define request/response schemas (Zod, Joi, or OpenAPI). Example for set-winning-score: { winningScore: z.number().int().min(10).max(1000) }. Reject anything else with 400 and a clear code. |
+| R3 | 🟣 Blocker | Publish an explicit GameState type and DB schema. Example fields: id, player1Id, player2Id, currentPlayerId, roundScore, scores: { [userId]: number }, winningScore, status: 'waiting'|'playing'|'finished', lastDice: [number,number], winnerId, version. |
+| R4 | 🟣 Blocker | Server alone generates dice with a CSPRNG (crypto.randomInt). On [6,6] set roundScore=0, switch currentPlayerId, return { dice, roundScore:0, turnPassed:true, message:"Double six!" }. Never accept client-supplied dice. |
+| R5 | 🔴 High    | After auth, every action must verify: game exists, caller is one of the two players, status==='playing', and caller === currentPlayerId. Return 403 NotYourTurn otherwise. |
+| R6 | 🔴 High    | Add an optimistic-locking version column. Update ... WHERE id=? AND version=? ; if 0 rows affected return 409 Conflict. Frontend re-fetches state. |
+| R7 | 🔴 High    | Write a minimal OpenAPI or markdown contract before coding: POST /games, GET /games/:id, POST /games/:id/roll, POST /games/:id/hold, POST /games/:id/new, POST /auth/*. Include status codes and error body shape { code, message }. |
+| R8 | 🔴 High    | Check win only after a successful Hold: if scores[player] >= winningScore then status='finished', winnerId=player. Reject any further actions with 409 GameFinished. Disallow changing winningScore once status='playing'. |
+| R9 | 🔴 High    | Pick a concrete stack (e.g. PostgreSQL + Prisma or SQLite for the exercise). Create tables User(id, username, passwordHash, wins), Game(...). Persist every state change; never keep authoritative state only in memory. |
+| R10| 🔴 High    | Put secrets in env vars. Configure CORS to allow only the React origin. Document both in a .env.example. |
+| R11| 🔴 High    | On the same page, maintain two separate auth contexts (two tokens in memory). UI shows "Playing as Alice / Switch to Bob". All API calls use the active token. No game logic moves to the client; only the token switches. |
+| R12| 🟡 Medium  | Define NewGame as: create a brand-new Game row, leave the old one with status='abandoned' (or 'finished' if already won). Return the new game id. Win counts are never reset. |
+| R13| 🟡 Medium  | After a double-6 the server already switched turn; any subsequent Hold from the previous player is rejected by the NotYourTurn check (R5). |
+| R14| 🟡 Medium  | Standardize error responses: { code: "NOT_YOUR_TURN", message: "..." }. Log requestId + userId + action on every mutation. |
+| R15| 🟡 Medium  | Treat AI as a special userId="ai". After a human Hold or double-6, if next player is AI, server runs a simple policy (e.g. hold at roundScore>=20 or when total+round would win) and returns the final state in the same response or via a follow-up endpoint. |
+| R16| 🟡 Medium  | Add GET /games?status=playing&limit=20&cursor=... scoped to the authenticated user. |
+| R17| 🔵 Low     | Suggest a monorepo or two folders: /backend (Node+Express/Fastify or Python), /frontend (Vite+React+TS). Require at least unit tests for the pure game-rule functions. |
+| R18| 🔵 Low     | On double-6 the roll response must include a flag (e.g. "event": "DOUBLE_SIX") so the React client can disable buttons for 1.5 s and play the animation/sound. |
+```
+
+Creative additions / new items (sorted by rough token cost relative to a 5 h Claude session)
+
+- Add AI player (greedy hold-at-20 or optimal target strategy) — ~15 % of 5 h session  
+- Persistent win leaderboard + simple stats endpoint — ~10 %  
+- Double-6 animation + short action lock + sound effect (frontend only, driven by server flag) — ~8 %  
+- Spectator mode / shareable game link (read-only token) — ~12 %  
+- Undo last action (server-side history stack, limited to current turn) — ~10 %  
+- Configurable dice faces or “pig” variant rules as a game option — ~15 %  
+- WebSocket push for the same-page two-user simulation (optional polish) — ~20 %  
+- Full OpenAPI + auto-generated TS client — ~10 %  
+
+Overall Verdict  
+🟡 Revise before proceeding
+
+z.ai:
+=====
+
+### ⚠️ Issues Found (5): 1 🟣 | 2 🔴 | 2 🟡
+
+| # | Category | Severity | Title | Description |
+| -- | -------- | -------- | ----- | ----------- |
+| I1 | Security | 🟣 Blocker | Undefined Authentication Strategy for Simulated Users | The plan requires authentication but also asks to "simulate different users on the same page." It does not specify how the frontend manages two distinct authenticated sessions simultaneously without a cumbersome login/logout flow. <br>**Example:** A standard browser session holds one auth token. To play as Player 2, the frontend would need to store and swap tokens for every request, or the API needs a specific simulation mode to bypass this. |
+| I2 | Bug | 🔴 High | Missing Concurrency Control for Game State | The backend manages state but lacks a specification for handling race conditions when actions are processed rapidly or simultaneously. <br>**Example:** Player 1 clicks "Hold" (Request A) and Player 2 clicks "Roll" (Request B) at the exact same time. If the backend processes Request B before Request A updates the database, Player 2 rolls during Player 1's turn. |
+| I3 | Architecture | 🔴 High | Undefined AI Turn Flow and State Propagation | The plan adds an AI opponent but does not define who triggers the AI move or how the frontend learns the result. <br>**Example:** If the backend triggers the AI, the frontend needs to poll or use WebSockets to know when to update the UI. If the frontend triggers it, the user might see a delay. This ambiguity blocks frontend design. |
+| I4 | Security | 🟡 Medium | Lack of Input Validation Constraints for Game Settings | The plan allows users to set the winning score but does not specify strict validation boundaries. <br>**Example:** A user sends a request `POST /game/start { winningScore: -5 }` or `{ winningScore: 999999999 }`, potentially breaking the game loop or causing backend errors. |
+| I5 | Correctness | 🟡 Medium | Ambiguous "New Game" Lifecycle Behavior | The requirement to "start a new game at any time" is unclear regarding database state handling. <br>**Example:** Does "New Game" soft-delete the current row and update it, or create a brand new Game ID? This ambiguity prevents defining the database schema and relationships. |
+
+### 🛠️ Recommendations
+
+| # | Severity | How to Fix |
+| -- | -------- | ---------- |
+| R1 | 🟣 Blocker | Implement a "simulation mode" in the API that accepts a custom header (e.g., `X-Player-Identity`) to override the auth token for local testing, or allow the frontend to pass distinct tokens per request. <br>**Example:** `curl -X POST /roll -H "Authorization: Bearer Player1_Token"` vs `... -H "Authorization: Bearer Player2_Token"` stored in memory. |
+| R2 | 🔴 High | Implement Optimistic Locking on the game state entity to prevent concurrent writes from conflicting turns. <br>**Example:** Include a `version` field in the game state. The API accepts `turnVersion` in the payload; if `db.version !== payload.turnVersion`, the API rejects the move with a 409 Conflict. |
+| R3 | 🔴 High | Define the AI interaction as a synchronous API call initiated by the client to keep the architecture simple for this scope. <br>**Example:** Frontend calls `POST /game/ai-move`. The backend executes the AI logic (roll/hold) internally and returns the resulting new game state in the HTTP response. |
+| R4 | 🟡 Medium | Enforce strict schema validation for the winning score configuration. <br>**Example:** In the API DTO, add `winningScore: z.number().int().min(10).max(1000)` to ensure valid game parameters. |
+| R5 | 🟡 Medium | Explicitly define "New Game" as creating a new database record with a status of `active` and marking the previous record as `finished`. <br>**Example:** `UPDATE games SET status = 'finished' WHERE id = currentId; INSERT INTO games (player1_id, player2_id) VALUES (...);` |
+
+### Creative Ideas (Sorted by estimated effort of 5h session)
+
+| # | Feature Idea | Effort Est. |
+| -- | ------------ | ----------- |
+| 1 | Add AI Opponent | 75% of 5h session |
+| 2 | Add Animated Dice (CSS/Canvas) | 20% of 5h session |
+| 3 | Add Sound Effects (Roll/Win) | 5% of 5h session |
+
+### Overall Verdict
+
+🟡 Revise before proceeding
+
+kimi.ai:
+========
+
+ ### ⚠️ Issues Found (20): 3 🟣 | 6 🔴 | 6 🟡 | 3 🔵 | 2 🟠
+
+| # | Category | Severity | Title | Description |
+|---|----------|----------|-------|-------------|
+| I1 | Security | 🟣 Blocker | Authentication mechanism completely unspecified | The plan states "Implement an API with authentication" but never names the mechanism—JWT, session cookies, OAuth, or API keys. Without this decision, no login flow, token storage, or session expiry can be built. Example: one developer chooses JWT while another assumes session cookies, making the frontend and backend incompatible before a single endpoint works. |
+| I2 | Security | 🟣 Blocker | No authorization model for game access | Authentication is required but the plan never defines who can do what. Can any logged-in user join any active game? Can a player modify another player's game state? Example: `POST /games/456/hold` sent by User A succeeds even when User A is not a participant in game 456, because the plan never specifies participant-level access control. |
+| I3 | Security | 🟣 Blocker | Zero input validation rules defined | No validation rules are specified for any input. Example: a `POST /games` request with `winningScore: -50` or `winningScore: 999999999` has no defined behavior. A `POST /games/123/roll` request could include a forged `dice1: 6, dice2: 6` body and the plan does not clarify whether the backend generates dice values or accepts them from the client. |
+| I4 | Architecture | 🔴 High | State synchronization method undefined | The frontend must "display game state" and call the API for actions, but the plan never specifies how the frontend receives state updates. Is it polling every second? WebSocket push? Server-Sent Events? Example: without this decision, a developer cannot choose between `useEffect` with `setInterval` or a `Socket.io` client, and the game will either feel laggy or be over-engineered. |
+| I5 | Architecture | 🔴 High | No data model or database schema | The plan says "Use database" but provides no schema. Example: it is unclear whether a `games` table stores `current_player_id` as a foreign key or as an integer index, whether player identities are normalized into a `users` table, or how turn history is recorded for the win-tracking feature. |
+| I6 | Architecture | 🔴 High | "Same page" multi-user simulation contradicts authentication | The plan asks to "simulate the different users on the same page" while also requiring authentication. This creates a contradiction: standard auth binds a session to a browser. If both players share one page, the backend receives requests from the same session and cannot distinguish Player 1 from Player 2 without additional context that the plan does not specify. Example: both "players" send `Authorization: Bearer <same_token>` and the API has no way to know which player is acting. |
+| I7 | Bug | 🔴 High | No error handling or recovery strategy | No strategy is defined for network failures, timeouts, or partial updates. Example: if `POST /games/123/hold` returns a 504 Gateway Timeout, the frontend does not know whether the hold succeeded. The player might retry and accidentally hold twice, or assume failure and roll again on a turn that already ended. |
+| I8 | Bug | 🔴 High | Race conditions in turn transitions undefined | The plan does not specify how the backend prevents concurrent actions. Example: if Player 1 sends a hold request that reaches 100 points, but before the response returns Player 2 sends a roll request, the database could process both actions and produce an invalid game state where the game continues after it should have ended. |
+| I9 | DX | 🔴 High | No API contract or endpoint specification | No endpoints, HTTP methods, request bodies, or response codes are defined. Example: a developer cannot know whether to send `POST /roll` with `{gameId: 123}` or `POST /games/123/roll` with an empty body, or what a 4xx response should contain. |
+| I10 | Correctness | 🟡 Medium | AI opponent mode contradicts 2-player rules | The core rules define a 2-player human game, but Extra #3 asks for an AI opponent without clarifying the mode. Example: does the AI authenticate as a fake user? Does it bypass auth? Is it a `singlePlayer: true` flag on game creation? The plan is silent. |
+| I11 | Correctness | 🟡 Medium | Game lifecycle states not defined | No states are defined for a game. Example: can a player change the winning score after the first roll? Can a finished game be restarted, or must a new game be created? The plan does not say. |
+| I12 | Bug | 🟡 Medium | Initial turn assignment not specified | The rules describe turns but never say who starts. Example: is Player 1 always first? Is it random? Without specification, two implementations could behave differently, and the same frontend might show different starting players against different backends. |
+| I13 | Architecture | 🟡 Medium | 6&6 animation requirement creates stateful frontend gap | Extra #4 requires the frontend to "disable actions briefly" after rolling 6&6. This is a temporary, time-based UI state that the stateless API cannot express. Example: the API returns `currentPlayer: 2` immediately after 6&6, but the frontend must independently track a 2-second "disabled" timer, creating a gap between API truth and UI state that the plan does not address. |
+| I14 | DX | 🟡 Medium | No testing strategy mentioned | No unit, integration, or end-to-end tests are mentioned. Example: the dice roll logic—especially the 6&6 rule—has no specified test cases, making regressions likely when someone refactors the scoring math. |
+| I15 | DX | 🟡 Medium | No observability or logging requirements | No logging, metrics, or error tracking is mentioned. Example: if a game enters an impossible state in production, there is no specified audit trail of actions to reconstruct what happened. |
+| I16 | Correctness | 🔵 Low | Sound effects lack accessibility controls | Extra #5 mentions sound effects and background music but does not require mute toggles or volume controls. Example: a player cannot disable audio, violating basic accessibility expectations. |
+| I17 | Scale | 🔵 Low | Win tracking lacks pagination or limits | Extra #1 tracks wins but does not specify storage limits or pagination. Example: after 10,000 games, fetching a player's full win history could return an unbounded payload and slow down the UI. |
+| I18 | Security | 🔵 Low | CORS and security headers omitted | A React frontend calling a separate backend API requires CORS configuration, and standard security headers (HSTS, CSP, X-Frame-Options) are not mentioned. Example: the API might reject frontend requests with CORS errors, or be vulnerable to clickjacking, and the plan gives no guidance. |
+| I19 | DX | 🟠 Nice to have | No responsive design considerations | The plan references UI mockups but never mentions mobile, tablet, or responsive breakpoints. Example: the dice layout might break on a 375px-wide screen. |
+| I20 | DX | 🟠 Nice to have | No deployment or environment documentation | No instructions exist for running the backend, frontend, or database locally. Example: a new developer does not know whether to use Docker, what environment variables are required, or how to seed the database. |
+
+---
+
+### 🛠️ Recommendations
+
+| # | Severity | How to Fix |
+|---|----------|------------|
+| R1 | 🟣 Blocker | Specify the auth mechanism explicitly. Example: "Use JWT access tokens (15-min expiry) with httpOnly refresh-token cookies. Include `Authorization: Bearer <token>` header on every API call." |
+| R2 | 🟣 Blocker | Define an authorization matrix. Example: "Add a `game_participants` table linking `user_id` to `game_id` with a `player_number` (1 or 2). Reject any action where `req.user.id` does not match the `current_player_id` in the game record." |
+| R3 | 🟣 Blocker | Add validation rules for every input. Example: `winningScore: z.number().int().min(1).max(10000)`; dice values must be generated server-side and never accepted from the request body; reject any action on a game with `status !== 'active'`. |
+| R4 | 🔴 High | Choose and document a state-sync strategy. Example: "Use Server-Sent Events on `GET /games/:id/events` for push updates, with a 5-second polling fallback. The event stream emits `{type: 'state', payload: GameState}` after every action." |
+| R5 | 🔴 High | Provide an entity-relationship diagram or schema. Example: `users(id, username, password_hash)`, `games(id, player1_id, player2_id, current_player, player1_score, player2_score, round_score, winning_score, status, created_at)`, `game_actions(id, game_id, player_id, action_type, dice1, dice2, created_at)`. |
+| R6 | 🔴 High | Replace "same page" simulation with explicit multi-session support. Example: "Require two separate login sessions (two browser tabs with different accounts). The frontend provides a 'Switch Player' button that clears the auth token and redirects to login. The backend identifies the player from the token, not from a query parameter." |
+| R7 | 🔴 High | Define an idempotency and retry strategy. Example: "Include an `Idempotency-Key: <uuid>` header on hold/roll requests. The backend stores processed keys for 24 hours and returns the cached response for duplicates. On network failure, the frontend shows 'Action pending—do not refresh' and polls for state." |
+| R8 | 🔴 High | Add database-level concurrency control. Example: "Use `SELECT FOR UPDATE` on the game row at the start of every action handler, or use an optimistic-locking `version` column. Reject any action with a stale `version` number with `409 Conflict`." |
+| R9 | 🔴 High | Document the API contract. Example: `POST /api/games` → `{winningScore: number}`; `POST /api/games/:id/roll` → `{dice1: number, dice2: number, roundScore: number, ...}`; `POST /api/games/:id/hold` → `{...}`; all return `4xx` with `{error: string}` on invalid input. |
+| R10 | 🟡 Medium | Clarify AI mode as a single-player variant. Example: "Add `mode: 'pvp' | 'pvai'` to the game creation payload. In `pvai` mode, the backend automatically generates AI turns after a 1-second delay using a simple heuristic (hold if roundScore ≥ 20). The AI does not authenticate." |
+| R11 | 🟡 Medium | Define explicit game states. Example: `waiting` (one player joined), `active` (both players joined, turns in progress), `finished` (winner declared). Reject `roll` and `hold` if `status !== 'active'`. Reject `winningScore` updates if `status !== 'waiting'`. |
+| R12 | 🟡 Medium | Specify turn order in game creation. Example: "Set `starting_player` to `1` or `2` randomly when the game transitions from `waiting` to `active`. Document this behavior in the API response." |
+| R13 | 🟡 Medium | Model the 6&6 penalty as a distinct game state. Example: "Add `lastRoll: {dice1, dice2, isDoubleSix: boolean}` to the API response. When `isDoubleSix` is true, the frontend disables the roll button for 2 seconds and shows the animation. The game state itself still transitions immediately; the delay is purely presentational." |
+| R14 | 🟡 Medium | Require test coverage for game logic. Example: "Write unit tests for the game engine covering: normal roll adds to round score, 6&6 resets round score and switches turn, hold adds to global score and switches turn, reaching winning score ends game, and unauthorized actions are rejected." |
+| R15 | 🟡 Medium | Add structured logging. Example: "Log every game action with `winston` or `pino` in JSON format: `{gameId, playerId, action, dice1, dice2, timestamp}`. Expose a `/health` endpoint and track `4xx`/`5xx` rates." |
+| R16 | 🔵 Low | Add audio controls. Example: "Include a mute toggle in the UI settings. Store the preference in `localStorage` as `audioMuted: boolean`. Respect `prefers-reduced-motion` for animations." |
+| R17 | 🔵 Low | Paginate win history. Example: "Add `?page=1&limit=20` to the win-history endpoint. Return `{wins: [...], total, page, limit}`." |
+| R18 | 🔵 Low | Document CORS and security headers. Example: "Configure CORS to allow only the frontend origin. Set `Content-Security-Policy: default-src 'self'` and `X-Frame-Options: DENY` on the API." |
+| R19 | 🟠 Nice to have | Add responsive design requirements. Example: "Support viewports from 320px to 1920px. Stack dice vertically on screens < 600px wide." |
+| R20 | 🟠 Nice to have | Provide a README with setup steps. Example: "Include `docker-compose.yml` for PostgreSQL, `.env.example` with required variables (`DATABASE_URL`, `JWT_SECRET`), and `npm run dev` scripts for both frontend and backend." |
+
+---
+
+### 💡 Creative Additions (sorted by estimated effort)
+
+| Idea | Effort |
+|------|--------|
+| Custom dice themes and skins (colors, materials, classic casino style) | 10% of 5h session |
+| Push notifications for turn reminders when tab is backgrounded | 10% of 5h session |
+| In-game chat with emoji reactions between players | 15% of 5h session |
+| Player statistics dashboard (win rate, average rolls per turn, luck factor, current streak) | 20% of 5h session |
+| AI opponent with configurable difficulty (conservative vs. aggressive) and decision transparency showing why the AI held or rolled | 25% of 5h session |
+| Game replay with animated dice roll history and shareable replay links | 35% of 5h session |
+| Spectator mode for watching live games without playing | 40% of 5h session |
+| Tournament bracket mode supporting 4+ players with elimination rounds | 50% of 5h session |
+| Real-time multiplayer across different browsers with WebSocket matchmaking and lobby system | 65% of 5h session |
+
+---
+
+### Overall Verdict
+
+🔴 Do not proceed

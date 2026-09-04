@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useDiceTumble } from '../../hooks/useDiceTumble';
 import './dice.css';
 
 export type DiceValue = 1 | 2 | 3 | 4 | 5 | 6;
@@ -36,27 +36,11 @@ const FACE_TRANSFORMS: Record<DiceValue, string> = {
 const IDLE_TRANSFORM: string =
   'rotateX(8.5turn) rotateY(6turn) rotateZ(0) translateZ(calc(var(--dice-size) * -1))';
 
-const ROLL_TICK_MS: number = 90;
-
-function nextTumbleFace(current: DiceValue): DiceValue {
-  return ((current % DICE_FACES.length) + 1) as DiceValue;
-}
-
 /** A single real 3D die. Cycles through faces while `rolling` to look like a tumble,
  * then settles on `value` once rolling stops (or shows an idle resting pose before the
  * first roll, when `value` is null). */
 export function Dice({ value, rolling }: DiceProps) {
-  const [tumbleFace, setTumbleFace] = useState<DiceValue>(value ?? 1);
-
-  useEffect(() => {
-    if (!rolling) {
-      return;
-    }
-    const intervalId: number = window.setInterval(() => {
-      setTumbleFace(nextTumbleFace);
-    }, ROLL_TICK_MS);
-    return () => window.clearInterval(intervalId);
-  }, [rolling]);
+  const tumbleFace = useDiceTumble({ value, rolling });
 
   const restingTransform: string = value !== null ? FACE_TRANSFORMS[value] : IDLE_TRANSFORM;
   const transform: string = rolling ? FACE_TRANSFORMS[tumbleFace] : restingTransform;

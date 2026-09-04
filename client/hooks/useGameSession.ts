@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import type { CreateGameInput, GameStateDto } from '../../../shared/index';
-import { ApiError } from '../../api/apiClient';
-import { logout } from '../../api/authApi';
+import type { CreateGameInput, GameStateDto } from '../../shared/index';
+import { ApiError } from '../api/apiClient';
+import { logout } from '../api/authApi';
 import {
   aiTurnGame,
   createGame,
@@ -9,25 +9,13 @@ import {
   listInProgressGames,
   rollGame,
   type GameActionResult,
-} from '../../api/gamesApi';
-import { GameBoard, type WinCounts } from '../../components/game-board/GameBoard';
-import { NewGameModal } from '../../components/new-game-modal/NewGameModal';
-import { createLogger } from '../../lib/logger';
-import { generatePlayerIdentities } from '../../lib/playerAvatars';
-import { playWinSound } from '../../lib/sound';
+} from '../api/gamesApi';
+import type { WinCounts } from '../components/game-board/GameBoard';
+import { createLogger } from '../lib/logger';
+import { generatePlayerIdentities, type PlayerIdentities } from '../lib/playerAvatars';
+import { playWinSound } from '../lib/sound';
 
 const logger = createLogger('game-screen');
-
-interface AuthenticatedUser {
-  id: string;
-  username: string;
-}
-
-interface GameScreenProps {
-  user: AuthenticatedUser;
-  onSessionExpired: () => void;
-  onLogout: () => void;
-}
 
 const DEFAULT_TARGET_SCORE: number = 100;
 const DEFAULT_AI_SEAT: 1 | 2 = 2; // the human plays seat 1 by default when starting an AI game
@@ -42,7 +30,7 @@ const AI_TURN_THINK_DELAY_MS: number = 900;
 // modal floating over an empty page). Never sent to the server; the modal's overlay
 // (z-50, full-viewport) sits on top and makes it visually inert, exactly like reopening
 // New Game mid-game.
-const PLACEHOLDER_GAME: GameStateDto = {
+export const PLACEHOLDER_GAME: GameStateDto = {
   id: '__placeholder__',
   mode: 'human',
   aiSeat: null,
@@ -66,7 +54,40 @@ function friendlyErrorMessage(error: unknown): string {
   return 'Something went wrong. Please try again.';
 }
 
-export function GameScreen({ user, onSessionExpired, onLogout }: GameScreenProps) {
+interface UseGameSessionOptions {
+  onSessionExpired: () => void;
+  onLogout: () => void;
+}
+
+interface UseGameSessionResult {
+  game: GameStateDto | null;
+  loading: boolean;
+  busy: boolean;
+  showNewGameModal: boolean;
+  midGameReopen: boolean;
+  targetScoreInput: number;
+  modeInput: 'human' | 'ai';
+  aiSeatInput: 1 | 2;
+  errorMessage: string | null;
+  infoMessage: string | null;
+  aiThinking: boolean;
+  wins: WinCounts;
+  aiHasPlayed: boolean;
+  identities: PlayerIdentities;
+  setTargetScoreInput: (value: number) => void;
+  setModeInput: (value: 'human' | 'ai') => void;
+  setAiSeatInput: (value: 1 | 2) => void;
+  handleCreate: () => Promise<void>;
+  handleRoll: () => Promise<void>;
+  handleHold: () => Promise<void>;
+  handleLogout: () => Promise<void>;
+  openNewGameModal: () => void;
+  closeNewGameModal: () => void;
+}
+
+/** Owns the in-progress game's server state, the New Game form fields, and every action
+ * that talks to the games API — GamePage consumes this and only renders. */
+export function useGameSession({ onSessionExpired, onLogout }: UseGameSessionOptions): UseGameSessionResult {
   const [game, setGame] = useState<GameStateDto | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [busy, setBusy] = useState<boolean>(false);
@@ -257,77 +278,38 @@ export function GameScreen({ user, onSessionExpired, onLogout }: GameScreenProps
     }
   }
 
-  if (loading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-background text-foreground">
-        <p>Loading…</p>
-      </main>
-    );
+  function openNewGameModal(): void {
+    setMidGameReopen(true);
+    setShowNewGameModal(true);
   }
 
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background p-4 text-foreground sm:p-6">
-      <div className="fixed top-4 left-4 z-40">
-        <p className="flex items-center gap-2 text-sm text-muted-foreground">
-          <button
-            type="button"
-            onClick={() => void handleLogout()}
-            className="cursor-pointer underline decoration-dotted underline-offset-4 hover:text-foreground"
-          >
-            Logout
-          </button>
-          <span aria-hidden="true">|</span>
-          <span>{user.username}</span>
-        </p>
-      </div>
+  function closeNewGameModal(): void {
+    setShowNewGameModal(false);
+  }
 
-      {errorMessage && (
-        <p role="alert" className="text-sm text-danger">
-          {errorMessage}
-        </p>
-      )}
-      {infoMessage && <p className="text-sm text-warning">{infoMessage}</p>}
-
-      {/* Assignment requirement: a player can start a new game at any time — GameBoard's
-          New Game button opens the modal below instead of navigating to a separate
-          screen; submitting it re-runs createGame, which abandons this game server-side
-          (M3b abandon+create) before creating the new one. Renders even with no real game
-          yet (PLACEHOLDER_GAME) so the New Game modal always opens over a board, never a
-          bare page. The automatic login-time modal still shows PLACEHOLDER_GAME (0/0)
-          behind it — even over an existing in-progress game — so the player never sees a
-          previous game's scores before choosing to resume it. Once the player has opened
-          New Game from the in-game button (midGameReopen), the real board stays visible
-          and unchanged behind the modal instead: opening/cancelling New Game must never
-          look like a reset — only submitting it ("Let's Go!") actually changes state. */}
-      <GameBoard
-        key={game?.id ?? 'placeholder'}
-        game={showNewGameModal && !midGameReopen ? PLACEHOLDER_GAME : (game ?? PLACEHOLDER_GAME)}
-        identities={identities}
-        wins={wins}
-        aiHasPlayed={aiHasPlayed}
-        onRoll={() => void handleRoll()}
-        onHold={() => void handleHold()}
-        onNewGame={() => {
-          setMidGameReopen(true);
-          setShowNewGameModal(true);
-        }}
-        busy={busy}
-        aiThinking={aiThinking}
-      />
-
-      {showNewGameModal && (
-        <NewGameModal
-          targetScore={targetScoreInput}
-          mode={modeInput}
-          aiSeat={aiSeatInput}
-          onTargetScoreChange={setTargetScoreInput}
-          onModeChange={setModeInput}
-          onAiSeatChange={setAiSeatInput}
-          onSubmit={() => void handleCreate()}
-          onCancel={game ? () => setShowNewGameModal(false) : null}
-          busy={busy}
-        />
-      )}
-    </main>
-  );
+  return {
+    game,
+    loading,
+    busy,
+    showNewGameModal,
+    midGameReopen,
+    targetScoreInput,
+    modeInput,
+    aiSeatInput,
+    errorMessage,
+    infoMessage,
+    aiThinking,
+    wins,
+    aiHasPlayed,
+    identities,
+    setTargetScoreInput,
+    setModeInput,
+    setAiSeatInput,
+    handleCreate,
+    handleRoll,
+    handleHold,
+    handleLogout,
+    openNewGameModal,
+    closeNewGameModal,
+  };
 }
