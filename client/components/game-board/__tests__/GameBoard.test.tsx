@@ -52,7 +52,8 @@ describe('GameBoard', () => {
           onNewGame={vi.fn()}
           busy={false}
           identities={IDENTITIES}
-          wins={{ 1: 0, 2: 0 }}
+          wins={{ seat1: 0, seat2: 0, ai: 0 }}
+          aiHasPlayed={false}
           aiThinking={false}
         />,
       );
@@ -75,7 +76,8 @@ describe('GameBoard', () => {
           onNewGame={vi.fn()}
           busy={false}
           identities={IDENTITIES}
-          wins={{ 1: 0, 2: 0 }}
+          wins={{ seat1: 0, seat2: 0, ai: 0 }}
+          aiHasPlayed={false}
           aiThinking={false}
         />,
       );
@@ -102,7 +104,8 @@ describe('GameBoard', () => {
           onNewGame={vi.fn()}
           busy={false}
           identities={IDENTITIES}
-          wins={{ 1: 0, 2: 0 }}
+          wins={{ seat1: 0, seat2: 0, ai: 0 }}
+          aiHasPlayed={false}
           aiThinking={false}
         />,
       );
@@ -117,7 +120,8 @@ describe('GameBoard', () => {
           onNewGame={vi.fn()}
           busy={false}
           identities={IDENTITIES}
-          wins={{ 1: 0, 2: 0 }}
+          wins={{ seat1: 0, seat2: 0, ai: 0 }}
+          aiHasPlayed={false}
           aiThinking={false}
         />,
       );
@@ -138,7 +142,8 @@ describe('GameBoard', () => {
           onNewGame={vi.fn()}
           busy={false}
           identities={IDENTITIES}
-          wins={{ 1: 0, 2: 0 }}
+          wins={{ seat1: 0, seat2: 0, ai: 0 }}
+          aiHasPlayed={false}
           aiThinking={false}
         />,
       );
@@ -160,7 +165,8 @@ describe('GameBoard', () => {
           onNewGame={vi.fn()}
           busy={false}
           identities={IDENTITIES}
-          wins={{ 1: 0, 2: 0 }}
+          wins={{ seat1: 0, seat2: 0, ai: 0 }}
+          aiHasPlayed={false}
           aiThinking={false}
         />,
       );
@@ -179,7 +185,8 @@ describe('GameBoard', () => {
           onNewGame={vi.fn()}
           busy={false}
           identities={IDENTITIES}
-          wins={{ 1: 0, 2: 0 }}
+          wins={{ seat1: 0, seat2: 0, ai: 0 }}
+          aiHasPlayed={false}
           aiThinking={false}
         />,
       );
@@ -199,7 +206,8 @@ describe('GameBoard', () => {
           onNewGame={vi.fn()}
           busy={false}
           identities={IDENTITIES}
-          wins={{ 1: 0, 2: 0 }}
+          wins={{ seat1: 0, seat2: 0, ai: 0 }}
+          aiHasPlayed={false}
           aiThinking={false}
         />,
       );
@@ -220,7 +228,8 @@ describe('GameBoard', () => {
           onNewGame={vi.fn()}
           busy={false}
           identities={IDENTITIES}
-          wins={{ 1: 0, 2: 0 }}
+          wins={{ seat1: 0, seat2: 0, ai: 0 }}
+          aiHasPlayed={false}
           aiThinking={false}
         />,
       );

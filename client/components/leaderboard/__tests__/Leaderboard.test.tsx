@@ -6,8 +6,10 @@ describe('Leaderboard', () => {
   it('should render both player names and their win counts', () => {
     render(
       <Leaderboard
-        seat1={{ seatNumber: 1, name: 'James Carter', wins: 2 }}
-        seat2={{ seatNumber: 2, name: 'Ryan Mitchell', wins: 5 }}
+        entries={[
+          { id: 'seat1', name: 'James Carter', wins: 2 },
+          { id: 'seat2', name: 'Ryan Mitchell', wins: 5 },
+        ]}
       />,
     );
 
@@ -20,8 +22,10 @@ describe('Leaderboard', () => {
   it('should place the player with more wins in the top row and the other in the second row', () => {
     render(
       <Leaderboard
-        seat1={{ seatNumber: 1, name: 'James Carter', wins: 2 }}
-        seat2={{ seatNumber: 2, name: 'Ryan Mitchell', wins: 5 }}
+        entries={[
+          { id: 'seat1', name: 'James Carter', wins: 2 },
+          { id: 'seat2', name: 'Ryan Mitchell', wins: 5 },
+        ]}
       />,
     );
 
@@ -37,8 +41,10 @@ describe('Leaderboard', () => {
   it('should keep seat 1 in the top row when both players are tied on wins', () => {
     render(
       <Leaderboard
-        seat1={{ seatNumber: 1, name: 'James Carter', wins: 3 }}
-        seat2={{ seatNumber: 2, name: 'Ryan Mitchell', wins: 3 }}
+        entries={[
+          { id: 'seat1', name: 'James Carter', wins: 3 },
+          { id: 'seat2', name: 'Ryan Mitchell', wins: 3 },
+        ]}
       />,
     );
 
@@ -53,8 +59,10 @@ describe('Leaderboard', () => {
   it('should move a row to the top row when its win count overtakes the other', () => {
     const { rerender } = render(
       <Leaderboard
-        seat1={{ seatNumber: 1, name: 'James Carter', wins: 1 }}
-        seat2={{ seatNumber: 2, name: 'Ryan Mitchell', wins: 0 }}
+        entries={[
+          { id: 'seat1', name: 'James Carter', wins: 1 },
+          { id: 'seat2', name: 'Ryan Mitchell', wins: 0 },
+        ]}
       />,
     );
     expect(screen.getByText('James Carter').closest('div')).toHaveStyle({
@@ -63,8 +71,10 @@ describe('Leaderboard', () => {
 
     rerender(
       <Leaderboard
-        seat1={{ seatNumber: 1, name: 'James Carter', wins: 1 }}
-        seat2={{ seatNumber: 2, name: 'Ryan Mitchell', wins: 2 }}
+        entries={[
+          { id: 'seat1', name: 'James Carter', wins: 1 },
+          { id: 'seat2', name: 'Ryan Mitchell', wins: 2 },
+        ]}
       />,
     );
 
@@ -74,5 +84,21 @@ describe('Leaderboard', () => {
     expect(screen.getByText('James Carter').closest('div')).toHaveStyle({
       transform: 'translateY(44px)',
     });
+  });
+
+  it('should keep a third entry (the AI) visible alongside both seats, never removing one', () => {
+    render(
+      <Leaderboard
+        entries={[
+          { id: 'seat1', name: 'James Carter', wins: 1 },
+          { id: 'seat2', name: 'Ryan Mitchell', wins: 4 },
+          { id: 'ai', name: 'AI Dices BOT', wins: 2 },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('James Carter')).toBeInTheDocument();
+    expect(screen.getByText('Ryan Mitchell')).toBeInTheDocument();
+    expect(screen.getByText('AI Dices BOT')).toBeInTheDocument();
   });
 });

@@ -10,7 +10,7 @@ import {
   rollGame,
   type GameActionResult,
 } from '../../api/gamesApi';
-import { GameBoard } from '../../components/game-board/GameBoard';
+import { GameBoard, type WinCounts } from '../../components/game-board/GameBoard';
 import { NewGameModal } from '../../components/new-game-modal/NewGameModal';
 import { createLogger } from '../../lib/logger';
 import { generatePlayerIdentities } from '../../lib/playerAvatars';
@@ -83,7 +83,12 @@ export function GameScreen({ user, onSessionExpired, onLogout }: GameScreenProps
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [aiThinking, setAiThinking] = useState<boolean>(false);
-  const [wins, setWins] = useState<Record<1 | 2, number>>({ 1: 0, 2: 0 });
+  const [wins, setWins] = useState<WinCounts>({ seat1: 0, seat2: 0, ai: 0 });
+  // Set once any game this session has ever had mode 'ai' and never reset back to false —
+  // the AI's leaderboard row must never disappear again after it first appears (bug: it
+  // was previously not tracked at all, so switching back to a human-vs-human game silently
+  // dropped whichever seat the AI had been "borrowing" its win count from).
+  const [aiHasPlayed, setAiHasPlayed] = useState<boolean>(false);
   // Guards the win-count/sound effect below against double-counting the same finished
   // game across re-renders (e.g. an unrelated state update re-running the effect).
   const countedWinGameIdsRef = useRef<Set<string>>(new Set());
@@ -181,9 +186,19 @@ export function GameScreen({ user, onSessionExpired, onLogout }: GameScreenProps
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game, busy, showNewGameModal]);
 
+  // Tracks whether the AI has ever taken a seat this session — see the aiHasPlayed
+  // declaration above for why this must never be un-set.
+  useEffect(() => {
+    if (game?.mode === 'ai') {
+      setAiHasPlayed(true);
+    }
+  }, [game]);
+
   // Counts a win exactly once per finished game (guarded by countedWinGameIdsRef, since
   // `game` changes reference on every action and would otherwise re-fire this effect for
-  // the same already-finished game) and plays the victory chime alongside it.
+  // the same already-finished game) and plays the victory chime alongside it. Attributed by
+  // fixed identity (seat1/seat2/ai), not by raw seat number, so a seat's win history stays
+  // with whoever actually won it rather than following the seat when the AI takes it over.
   useEffect(() => {
     if (!game || game.status !== 'finished' || game.winnerSeat === null) {
       return;
@@ -193,7 +208,9 @@ export function GameScreen({ user, onSessionExpired, onLogout }: GameScreenProps
     }
     countedWinGameIdsRef.current.add(game.id);
     const winnerSeat: 1 | 2 = game.winnerSeat;
-    setWins((current) => ({ ...current, [winnerSeat]: current[winnerSeat] + 1 }));
+    const winnerIsAi: boolean = game.mode === 'ai' && winnerSeat === game.aiSeat;
+    const winnerKey: keyof WinCounts = winnerIsAi ? 'ai' : winnerSeat === 1 ? 'seat1' : 'seat2';
+    setWins((current) => ({ ...current, [winnerKey]: current[winnerKey] + 1 }));
     playWinSound();
   }, [game]);
 
@@ -287,6 +304,7 @@ export function GameScreen({ user, onSessionExpired, onLogout }: GameScreenProps
         game={showNewGameModal && !midGameReopen ? PLACEHOLDER_GAME : (game ?? PLACEHOLDER_GAME)}
         identities={identities}
         wins={wins}
+        aiHasPlayed={aiHasPlayed}
         onRoll={() => void handleRoll()}
         onHold={() => void handleHold()}
         onNewGame={() => {

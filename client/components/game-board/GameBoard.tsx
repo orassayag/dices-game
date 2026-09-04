@@ -6,8 +6,23 @@ import { Button } from '../button/Button';
 import { Confetti } from '../confetti/Confetti';
 import { Leaderboard } from '../leaderboard/Leaderboard';
 import { PlayerCard } from '../player-card/PlayerCard';
-import { resolveSeatDisplay, type PlayerIdentities } from '../../lib/playerAvatars';
+import {
+  AI_PLAYER_NAME,
+  resolveSeatDisplay,
+  type PlayerIdentities,
+} from '../../lib/playerAvatars';
 import './gameBoard.css';
+
+// Cross-game win counts, owned by GameScreen and keyed by fixed identity — never by
+// "whichever seat is currently playing" — so a seat switching between its human and the AI
+// (New Game modal) never reassigns one identity's wins to the other (bug: the human
+// opponent's row was disappearing from the leaderboard, replaced by the AI's, the moment
+// an AI game started, because both had shared the same seat-numbered win counter).
+export interface WinCounts {
+  seat1: number;
+  seat2: number;
+  ai: number;
+}
 
 interface GameBoardProps {
   game: GameStateDto;
@@ -15,9 +30,11 @@ interface GameBoardProps {
   // here, or editing the New Game modal (which re-renders this component) would reshuffle
   // the avatars/names shown for a game still in progress.
   identities: PlayerIdentities;
-  // Cross-game win counts, keyed by seat — owned by GameScreen (CSS polish #2: the
-  // leaderboard now renders inside this panel instead of floating over the page).
-  wins: Record<1 | 2, number>;
+  wins: WinCounts;
+  // True once any game this session has ever had mode 'ai' — the AI's leaderboard row
+  // appears from that point on and is never removed again (a player is never deleted from
+  // the leaderboard), even after switching back to a human-vs-human game.
+  aiHasPlayed: boolean;
   onRoll: () => void;
   onHold: () => void;
   onNewGame: () => void;
@@ -34,6 +51,12 @@ const BUST_FREEZE_MS: number = 1200;
 // Minimum time the dice spend visibly tumbling after Roll is clicked, so a fast server
 // response doesn't skip straight to the result — the roll always reads as an animation.
 const MIN_ROLL_ANIMATION_MS: number = 550;
+
+// Must match dice.css's `.dice-cube` transition-duration (380ms) — once `rolling` flips
+// false the cube still spends this long visually rotating from its last tumble face into
+// its landed one. The round score must not reveal the new number until that rotation
+// actually finishes, or the score changes while the dice are still visibly mid-roll.
+const DICE_SETTLE_TRANSITION_MS: number = 380;
 
 /**
  * Describes the last move for the "what just happened" line. `game.lastMove` is `null`
@@ -70,6 +93,7 @@ export function GameBoard({
   game,
   identities,
   wins,
+  aiHasPlayed,
   onRoll,
   onHold,
   onNewGame,
@@ -82,7 +106,11 @@ export function GameBoard({
   const [displayDice, setDisplayDice] = useState<[DiceValue, DiceValue] | null>(null);
   const [displayedRoundScore, setDisplayedRoundScore] = useState<number>(game.roundScore);
   const rollStartedAtRef = useRef<number>(0);
-  const isFirstRollTransitionRef = useRef<boolean>(true);
+  // Tracks whether the *previous* render had the dice tumbling, so the round-score effect
+  // below can tell "a roll just landed" (roundScore may lag the dice by one more render
+  // while `rolling` itself already flipped) apart from "roundScore changed for some other
+  // reason" (a hold, an AI forfeit) — only the former needs the settle delay.
+  const wasRollingRef = useRef<boolean>(false);
 
   // Gated on `rolling` (not just game.busted) so the bust ring/message never appear while
   // the dice are still tumbling — the server already knows the roll busted the instant the
@@ -113,16 +141,28 @@ export function GameBoard({
     }
   }, [game.lastMove]);
 
-  // Keeps the displayed round score in sync with the server for every change outside the
-  // roll-animation flow (a hold, an AI forfeit) — while the dice are still tumbling the old
-  // value stays on screen; the moment `rolling` flips false this fires in the same render
-  // pass as the pop-key effect below, so the new number and its pop-in animation land
-  // together instead of the number swapping in after the animation has already played.
+  // Keeps the displayed round score in sync with the server. Two distinct cases share this
+  // effect: (1) a roll just finished (`rolling` transitioned true → false) — the number and
+  // its pop-in (bumping scorePulseKey) must wait for DICE_SETTLE_TRANSITION_MS so they land
+  // exactly when the dice finish their CSS settle-rotation, not the instant `rolling` flips;
+  // (2) any other change (a hold, an AI forfeit) — no dice animation is playing, so the
+  // number updates immediately with no pop-in.
   useEffect(() => {
     if (rolling) {
+      wasRollingRef.current = true;
       return;
     }
-    setDisplayedRoundScore(game.roundScore);
+    const justFinishedRolling: boolean = wasRollingRef.current;
+    wasRollingRef.current = false;
+    if (!justFinishedRolling) {
+      setDisplayedRoundScore(game.roundScore);
+      return;
+    }
+    const timeoutId: number = window.setTimeout(() => {
+      setDisplayedRoundScore(game.roundScore);
+      setScorePulseKey((key) => key + 1);
+    }, DICE_SETTLE_TRANSITION_MS);
+    return () => window.clearTimeout(timeoutId);
   }, [game.roundScore, rolling]);
 
   // The server already has the result by the time `busy` flips back to false; this only
@@ -137,22 +177,6 @@ export function GameBoard({
     const timeoutId: number = window.setTimeout(() => setRolling(false), remainingMs);
     return () => window.clearTimeout(timeoutId);
   }, [busy, rolling]);
-
-  // Bumps a remount key on the round-score value the instant the dice finish tumbling, so
-  // its pop-in animation (gameBoard.css) replays on every roll instead of firing once on
-  // mount. Skips the very first (mount) transition, which isn't a completed roll. The sync
-  // effect above updates displayedRoundScore on this same `rolling` change, so the
-  // remounted span's pop-in animation plays showing the new number, not the stale one.
-  useEffect(() => {
-    if (isFirstRollTransitionRef.current) {
-      isFirstRollTransitionRef.current = false;
-      return;
-    }
-    if (rolling) {
-      return;
-    }
-    setScorePulseKey((key) => key + 1);
-  }, [rolling]);
 
   function handleRollClick(): void {
     rollStartedAtRef.current = Date.now();
@@ -175,6 +199,14 @@ export function GameBoard({
   // (next New Game) shows the same player as before with no restore step needed.
   const seat1Display = resolveSeatDisplay(identities.seat1, game.mode === 'ai' && game.aiSeat === 1);
   const seat2Display = resolveSeatDisplay(identities.seat2, game.mode === 'ai' && game.aiSeat === 2);
+  // The leaderboard tracks the two fixed human identities plus the AI, never "whichever
+  // seat is live right now" — so it keeps identities.seat1/seat2's own names even while a
+  // seat is currently AI-played, instead of seat1Display/seat2Display's live swap.
+  const leaderboardEntries = [
+    { id: 'seat1', name: identities.seat1.name, wins: wins.seat1 },
+    { id: 'seat2', name: identities.seat2.name, wins: wins.seat2 },
+    ...(aiHasPlayed ? [{ id: 'ai', name: AI_PLAYER_NAME, wins: wins.ai }] : []),
+  ];
 
   return (
     <section
@@ -206,10 +238,7 @@ export function GameBoard({
       {/* Pinned to the panel's own top-left corner, mirroring New Game's top-right
           placement — always visible, never competing with the round-score area below. */}
       <div className="absolute top-3 left-3 sm:top-4 sm:left-4">
-        <Leaderboard
-          seat1={{ seatNumber: 1, name: seat1Display.name, wins: wins[1] }}
-          seat2={{ seatNumber: 2, name: seat2Display.name, wins: wins[2] }}
-        />
+        <Leaderboard entries={leaderboardEntries} />
       </div>
 
       {/* Pinned to the panel's own top-right corner (not the dice row further down), so

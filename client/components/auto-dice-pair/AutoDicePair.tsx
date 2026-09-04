@@ -3,11 +3,11 @@ import { Dice, type DiceValue } from '../dice/Dice';
 
 const DICE_VALUES: DiceValue[] = [1, 2, 3, 4, 5, 6];
 
-// §4: dice roll independently, never together — a random gap between rounds, floored at
-// 10s so the page never feels busy, with a further random spread on top for "several
-// seconds" of variance rather than a metronomic exact-10s tick.
-const MIN_ROLL_GAP_MS: number = 10_000;
-const MAX_ROLL_GAP_MS: number = 16_000;
+// §4: dice roll independently, never together — a random gap between rounds, centered on
+// ~7s so the page reads as lively, with a spread either side so it never ticks on a
+// metronomic exact interval.
+const MIN_ROLL_GAP_MS: number = 5_000;
+const MAX_ROLL_GAP_MS: number = 9_000;
 const ROLL_ANIMATION_MS: number = 650;
 
 // The very first roll uses its own, much shorter window — the page should feel alive
