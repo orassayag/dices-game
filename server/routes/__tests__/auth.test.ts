@@ -4,20 +4,27 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../../app.js';
 import { truncateAll } from '../../__tests__/helpers/testDb.js';
 import * as authCrypto from '../../lib/authCrypto.js';
+import {
+  extractSetCookieHeaders,
+  fetchPreAuthCsrf,
+  withCsrfHeaders,
+} from '../../__tests__/helpers/csrf.js';
 
 const CREDENTIALS = { username: 'alice', password: 'correct horse battery staple' };
 
-// supertest types `set-cookie` as `string | string[] | undefined` (raw headers can be
-// either); tests always send at least one cookie, so normalize to an array up front.
-function getSetCookieHeaders(response: request.Response): string[] {
-  const raw: unknown = response.headers['set-cookie'];
-  if (Array.isArray(raw)) {
-    return raw;
-  }
-  if (typeof raw === 'string') {
-    return [raw];
-  }
-  throw new Error('Expected a Set-Cookie header on the response.');
+// Every register/login request is CSRF-guarded (M1b, stage 4) — a fresh pre-auth token
+// must be fetched and attached before each one. See server/__tests__/helpers/csrf.ts.
+async function register(
+  app: ReturnType<typeof createApp>,
+  body: Record<string, unknown> = CREDENTIALS,
+) {
+  const csrf = await fetchPreAuthCsrf(app);
+  return await withCsrfHeaders(request(app).post('/auth/register'), csrf).send(body);
+}
+
+async function login(app: ReturnType<typeof createApp>, body: Record<string, unknown>) {
+  const csrf = await fetchPreAuthCsrf(app);
+  return await withCsrfHeaders(request(app).post('/auth/login'), csrf).send(body);
 }
 
 describe('POST /auth/register', () => {
@@ -27,20 +34,21 @@ describe('POST /auth/register', () => {
 
   it('should create a user and set the auth cookie', async () => {
     const app = createApp();
-    const response = await request(app).post('/auth/register').send(CREDENTIALS);
+    const response = await register(app);
 
     expect(response.status).toBe(201);
     expect(response.body).toEqual({ user: { id: expect.any(String), username: 'alice' } });
-    const setCookie = getSetCookieHeaders(response);
+    const setCookie = extractSetCookieHeaders(response);
     expect(setCookie.some((cookie) => cookie.startsWith('token='))).toBe(true);
   });
 
   it('should reject a duplicate username (case/whitespace-insensitive)', async () => {
     const app = createApp();
-    await request(app).post('/auth/register').send(CREDENTIALS);
-    const response = await request(app)
-      .post('/auth/register')
-      .send({ username: '  Alice  ', password: 'another valid password' });
+    await register(app);
+    const response = await register(app, {
+      username: '  Alice  ',
+      password: 'another valid password',
+    });
 
     expect(response.status).toBe(400);
     expect(response.body.error.code).toBe('INVALID_INPUT');
@@ -48,18 +56,14 @@ describe('POST /auth/register', () => {
 
   it('should reject a password under the minimum length', async () => {
     const app = createApp();
-    const response = await request(app)
-      .post('/auth/register')
-      .send({ username: 'bob', password: 'short' });
+    const response = await register(app, { username: 'bob', password: 'short' });
     expect(response.status).toBe(400);
     expect(response.body.error.code).toBe('INVALID_INPUT');
   });
 
   it('should reject a body with unknown extra fields', async () => {
     const app = createApp();
-    const response = await request(app)
-      .post('/auth/register')
-      .send({ ...CREDENTIALS, isAdmin: true });
+    const response = await register(app, { ...CREDENTIALS, isAdmin: true });
     expect(response.status).toBe(400);
   });
 });
@@ -71,29 +75,28 @@ describe('POST /auth/login', () => {
 
   it('should log in with correct credentials and set the auth cookie', async () => {
     const app = createApp();
-    await request(app).post('/auth/register').send(CREDENTIALS);
+    await register(app);
 
-    const response = await request(app).post('/auth/login').send(CREDENTIALS);
+    const response = await login(app, CREDENTIALS);
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ user: { id: expect.any(String), username: 'alice' } });
   });
 
   it('should return a generic INVALID_CREDENTIALS for a wrong password', async () => {
     const app = createApp();
-    await request(app).post('/auth/register').send(CREDENTIALS);
+    await register(app);
 
-    const response = await request(app)
-      .post('/auth/login')
-      .send({ username: 'alice', password: 'totally wrong password' });
+    const response = await login(app, { username: 'alice', password: 'totally wrong password' });
     expect(response.status).toBe(401);
     expect(response.body.error.code).toBe('INVALID_CREDENTIALS');
   });
 
   it('should return the same generic INVALID_CREDENTIALS for a nonexistent username', async () => {
     const app = createApp();
-    const response = await request(app)
-      .post('/auth/login')
-      .send({ username: 'nobody-registered', password: 'whatever password' });
+    const response = await login(app, {
+      username: 'nobody-registered',
+      password: 'whatever password',
+    });
     expect(response.status).toBe(401);
     expect(response.body.error.code).toBe('INVALID_CREDENTIALS');
   });
@@ -101,21 +104,27 @@ describe('POST /auth/login', () => {
   it('should invoke bcrypt.compare exactly once for a nonexistent username (constant-time login)', async () => {
     const compareSpy = vi.spyOn(authCrypto, 'verifyPassword');
     const app = createApp();
-    await request(app)
-      .post('/auth/login')
-      .send({ username: 'nobody-registered', password: 'whatever password' });
+    await login(app, { username: 'nobody-registered', password: 'whatever password' });
     expect(compareSpy).toHaveBeenCalledTimes(1);
     compareSpy.mockRestore();
   });
 });
 
 describe('POST /auth/logout', () => {
-  it('should clear the auth cookie', async () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  // Stage 4 (M1b) added requireAuth to logout so the CSRF check can bind the token to
+  // req.userId — logout is no longer reachable without a valid session. The success
+  // path (valid auth cookie + matching user-bound CSRF token clears both cookies) is
+  // covered in server/routes/__tests__/csrf.test.ts alongside the rest of the CSRF
+  // verification suite.
+  it('should reject logout with no auth cookie', async () => {
     const app = createApp();
-    const response = await request(app).post('/auth/logout');
-    expect(response.status).toBe(204);
-    const setCookie = getSetCookieHeaders(response);
-    expect(setCookie.some((cookie) => cookie.startsWith('token=;'))).toBe(true);
+    const csrf = await fetchPreAuthCsrf(app);
+    const response = await withCsrfHeaders(request(app).post('/auth/logout'), csrf);
+    expect(response.status).toBe(401);
   });
 });
 

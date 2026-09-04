@@ -94,3 +94,28 @@ no CSRF cookie yet — `GET /auth/csrf` lands in stage 4. Logout does not bump
 `tokenVersion` (the plan documents cookie-clear and the tokenVersion bump as two separate
 capabilities, and the API table has no logout-all endpoint).
 **User overrides during review:** None recorded.
+
+## Stage 4 — Hardened CSRF: pre-auth token, HMAC-bound middleware, Origin check, __Host- prefix (committed 2026-09-04)
+**Files:** server/lib/csrfCrypto.ts, server/middleware/csrf.ts,
+server/__tests__/helpers/csrf.ts, server/lib/__tests__/csrfCrypto.test.ts,
+server/middleware/__tests__/csrf.test.ts, server/routes/__tests__/csrf.test.ts,
+server/routes/auth.ts, server/routes/__tests__/auth.test.ts,
+server/routes/__tests__/authRegisterRateLimit.test.ts,
+server/routes/__tests__/authLoginRateLimit.test.ts
+**What was built:** M1b per plan_v6.md §1/§5/§10 (I3, I9) — hardened, user-bound
+double-submit CSRF on top of stage 3's auth. `server/lib/csrfCrypto.ts` generates/verifies
+`<random>.<hmac>` tokens (HMAC-SHA256 keyed by `env.jwtSecret`, domain-separated via a
+`'csrf-v1:'` prefix) for both a pre-auth subject and a per-user subject.
+`server/middleware/csrf.ts` (`csrfProtection`) checks Origin/Referer against
+`env.frontendUrl`, header==cookie, then the HMAC against `req.userId` (post-`requireAuth`)
+or the pre-auth subject. `GET /auth/csrf` issues the pre-auth cookie; register/login rotate
+to a user-bound cookie on success; logout now requires `requireAuth` before `csrfProtection`
+so the token is verified against the real authenticated subject, then clears both cookies.
+31 new tests (crypto, middleware, route-level covering every §10 verification bullet).
+Verified: type-check, lint, test (109/109), build, `prettier --check`.
+**Key decisions:** Reused `env.jwtSecret` as the CSRF HMAC key rather than a dedicated
+`CSRF_SECRET` env var. Pre-auth subject is a fixed string (no server-side session to bind a
+nonce to — stateless JWT auth). Logout now requires authentication, a deliberate scope
+addition beyond stage 3's "clears cookies" text, needed for the CSRF check to bind to the
+real subject. 10 files touched, at the stage-sizing ceiling.
+**User overrides during review:** None recorded.
