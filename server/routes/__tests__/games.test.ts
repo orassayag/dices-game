@@ -3,64 +3,8 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../../app.js';
 import { truncateAll } from '../../__tests__/helpers/testDb.js';
-import {
-  CSRF_HEADER_NAME,
-  TEST_FRONTEND_ORIGIN,
-  extractCookieValue,
-  extractSetCookieHeaders,
-  fetchPreAuthCsrf,
-  withCsrfHeaders,
-} from '../../__tests__/helpers/csrf.js';
-
-const AUTH_COOKIE_NAME: string = 'token';
-const CSRF_COOKIE_NAME: string = 'csrfToken';
-
-interface TestSession {
-  userId: string;
-  cookieHeader: string;
-  csrfToken: string;
-}
-
-// Registers a fresh user through the real HTTP flow (pre-auth CSRF → register), then
-// returns everything a subsequent authenticated + CSRF-guarded request needs.
-async function registerTestUser(
-  app: ReturnType<typeof createApp>,
-  username: string,
-): Promise<TestSession> {
-  const preAuthCsrf = await fetchPreAuthCsrf(app);
-  const response = await withCsrfHeaders(request(app).post('/auth/register'), preAuthCsrf).send({
-    username,
-    password: 'correct horse battery staple',
-  });
-  const setCookie = extractSetCookieHeaders(response);
-  const authToken = extractCookieValue(setCookie, AUTH_COOKIE_NAME);
-  const csrfToken = extractCookieValue(setCookie, CSRF_COOKIE_NAME);
-  return {
-    userId: (response.body as { user: { id: string } }).user.id,
-    cookieHeader: `${AUTH_COOKIE_NAME}=${authToken}; ${CSRF_COOKIE_NAME}=${csrfToken}`,
-    csrfToken,
-  };
-}
-
-function authedGet(
-  app: ReturnType<typeof createApp>,
-  path: string,
-  session: TestSession,
-): request.Test {
-  return request(app).get(path).set('Cookie', session.cookieHeader);
-}
-
-function authedPost(
-  app: ReturnType<typeof createApp>,
-  path: string,
-  session: TestSession,
-): request.Test {
-  return request(app)
-    .post(path)
-    .set('Origin', TEST_FRONTEND_ORIGIN)
-    .set(CSRF_HEADER_NAME, session.csrfToken)
-    .set('Cookie', session.cookieHeader);
-}
+import { authedGet, authedPost, registerTestUser } from '../../__tests__/helpers/authedSession.js';
+import { TEST_FRONTEND_ORIGIN } from '../../__tests__/helpers/csrf.js';
 
 describe('POST /games', () => {
   beforeEach(async () => {
@@ -106,6 +50,25 @@ describe('POST /games', () => {
       .send({ targetScore: 100, mode: 'human' });
 
     expect(response.status).toBe(403);
+  });
+
+  it('should abandon the previous in-progress game when creating a new one (§7)', async () => {
+    const app = createApp();
+    const session = await registerTestUser(app, 'zoe');
+    const first = await authedPost(app, '/games', session).send({
+      targetScore: 100,
+      mode: 'human',
+    });
+
+    const second = await authedPost(app, '/games', session).send({
+      targetScore: 100,
+      mode: 'human',
+    });
+    expect(second.status).toBe(201);
+    expect(second.body.id).not.toBe(first.body.id);
+
+    const firstFetched = await authedGet(app, `/games/${first.body.id}`, session);
+    expect(firstFetched.body.status).toBe('abandoned');
   });
 });
 

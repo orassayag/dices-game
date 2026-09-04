@@ -7,6 +7,7 @@ import {
   CreateGameInputSchema,
   ExpectedVersionSchema,
   GameStateSchema,
+  ListGamesQuerySchema,
 } from '../schemas';
 
 function buildGameState(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -163,6 +164,38 @@ describe('ExpectedVersionSchema', () => {
 
   it('should reject an unknown key (strict)', () => {
     expect(() => ExpectedVersionSchema.parse({ expectedVersion: 1, dice: [1, 2] })).toThrow();
+  });
+});
+
+describe('ListGamesQuerySchema', () => {
+  it('should accept status=in_progress with no limit and default the limit', () => {
+    const result = ListGamesQuerySchema.parse({ status: 'in_progress' });
+    expect(result.limit).toBe(10);
+  });
+
+  it('should coerce a string limit (as query params always arrive) to a number', () => {
+    const result = ListGamesQuerySchema.parse({ status: 'in_progress', limit: '5' });
+    expect(result.limit).toBe(5);
+  });
+
+  it('should reject a status other than in_progress', () => {
+    expect(() => ListGamesQuerySchema.parse({ status: 'finished' })).toThrow();
+  });
+
+  it('should reject a missing status', () => {
+    expect(() => ListGamesQuerySchema.parse({})).toThrow();
+  });
+
+  it('should reject a limit over the max', () => {
+    expect(() => ListGamesQuerySchema.parse({ status: 'in_progress', limit: '51' })).toThrow();
+  });
+
+  it('should reject a zero or negative limit', () => {
+    expect(() => ListGamesQuerySchema.parse({ status: 'in_progress', limit: '0' })).toThrow();
+  });
+
+  it('should reject an unknown query key (strict)', () => {
+    expect(() => ListGamesQuerySchema.parse({ status: 'in_progress', sort: 'asc' })).toThrow();
   });
 });
 

@@ -150,3 +150,37 @@ win — that guarded counter increment is stage 6/M3b scope. 10 files touched, a
 stage-sizing ceiling — each is a genuinely separate concern (pure rules /
 authorization / DB↔DTO translation / orchestration / HTTP).
 **User overrides during review:** None recorded.
+
+## Stage 6 — Game hardening: concurrency, abandon+create, win increment, DB error mapping, gameplay rate limit (committed 2026-09-04)
+**Files:** shared/schemas.ts, shared/__tests__/schemas.test.ts,
+server/services/gameService.ts, server/services/__tests__/gameService.test.ts,
+server/routes/games.ts, server/routes/__tests__/games.test.ts,
+server/routes/__tests__/gamesList.test.ts, server/routes/__tests__/gamesRateLimit.test.ts,
+server/__tests__/helpers/authedSession.ts
+**What was built:** M3b per plan_v6.md §6/§7/§10 on top of stage 5's happy path.
+`createGame` now runs abandon+create in one `prisma.$transaction` (§7) — any existing
+`in_progress` game for the owner is marked `abandoned` before the new game is created,
+with a genuine unique-index race mapped to `409 GAME_CONFLICT` via an exported,
+directly-unit-tested predicate (`isUniqueConstraintViolation`). Roll/hold's zero-row
+update path now distinguishes `GAME_ABANDONED` from a plain `VERSION_CONFLICT` by
+re-reading the row's status inside the same transaction (§6). `holdGame` credits the
+owner's `User.wins` exactly once on a winning hold, guarded by the same version check
+that already prevents a stale retry from re-executing. `GET /games?status=in_progress`
+(list-my-games) lands via `ListGamesQuerySchema` + `listInProgressGames`. Gameplay rate
+limiting (60/min per authenticated user) applied to roll/hold. `GAME_FINISHED` gets no
+new error-mapping code — every write path filters `status: 'in_progress'` in its own
+`WHERE` clause, so the trigger's SQLSTATE can never fire through app code; already
+covered by stage 1's `schema.test.ts`. Verified: type-check, lint, test (169/169 across
+16 suites), build, `prettier --check`.
+**Key decisions:** `GAME_CONFLICT` mapping unit-tested via a directly-constructed
+`Prisma.PrismaClientKnownRequestError` rather than a live-DB race or `vi.spyOn` on the
+shared `prisma` singleton (an earlier attempt spying on `$transaction` left the
+proxy-backed client broken for later tests in the same worker). List tests extracted to
+their own file (`gamesList.test.ts`) to stay under the register rate limiter's 10/hr
+ceiling in `games.test.ts`, with `registerTestUser`/`authedGet`/`authedPost` pulled into
+a shared `server/__tests__/helpers/authedSession.ts` once a third file needed them.
+Deliberately did NOT extract a shared `rateLimitHandler.ts` for `auth.ts`'s and
+`games.ts`'s near-identical rate-limit callback — a first pass did, but it pushed the
+stage to 11 touched files; reverted to keep `auth.ts` out of this stage's diff and gave
+`games.ts` its own local copy (9 files touched, under the ceiling).
+**User overrides during review:** None recorded.

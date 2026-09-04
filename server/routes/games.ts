@@ -1,15 +1,28 @@
-// Game routes (plan_v6.md §5, happy-path subset — M3a). Every route requires auth;
-// every state-changing route is also CSRF-guarded, matching the auth routes' wiring
-// (server/routes/auth.ts). Routes parse/dispatch only — all rules live in gameService.
+// Game routes (plan_v6.md §5, §7, §10 — M3a happy path + M3b hardening). Every route
+// requires auth; every state-changing route is also CSRF-guarded, matching the auth
+// routes' wiring (server/routes/auth.ts). Routes parse/dispatch only — all rules live in
+// gameService.
 
 import type { NextFunction, Request, Response } from 'express';
 import { Router } from 'express';
+import { rateLimit } from 'express-rate-limit';
 import type { CreateGameInput, ExpectedVersionInput } from '../../shared/index.js';
-import { CreateGameInputSchema, ExpectedVersionSchema } from '../../shared/index.js';
+import {
+  CreateGameInputSchema,
+  ExpectedVersionSchema,
+  ListGamesQuerySchema,
+} from '../../shared/index.js';
+import { RateLimitedError } from '../lib/errors.js';
 import { requireAuth } from '../middleware/auth.js';
 import { csrfProtection } from '../middleware/csrf.js';
 import { validateBody } from '../middleware/validate.js';
-import { createGame, getGame, holdGame, rollGame } from '../services/gameService.js';
+import {
+  createGame,
+  getGame,
+  holdGame,
+  listInProgressGames,
+  rollGame,
+} from '../services/gameService.js';
 
 export const gamesRouter: Router = Router();
 
@@ -30,6 +43,36 @@ function requireUserId(req: Request): string {
   }
   return userId;
 }
+
+function rejectWithRateLimitedError(_req: Request, _res: Response, next: NextFunction): void {
+  next(new RateLimitedError('Too many requests. Please try again later.'));
+}
+
+// Gameplay rate limit (§10): 60/min per authenticated user (JWT sub), on roll/hold/
+// ai-turn — caps a tight loop against DB load (and, once ai-turn lands in stage 9/10, a
+// live LLM key). Exported so stage 9/10's ai-turn route reuses the same limiter instance
+// rather than defining a third one.
+const GAMEPLAY_RATE_LIMIT_WINDOW_MS: number = 60 * 1000;
+const GAMEPLAY_RATE_LIMIT_MAX_REQUESTS: number = 60;
+
+export const gameplayRateLimiter = rateLimit({
+  windowMs: GAMEPLAY_RATE_LIMIT_WINDOW_MS,
+  limit: GAMEPLAY_RATE_LIMIT_MAX_REQUESTS,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: Request): string => requireUserId(req),
+  handler: rejectWithRateLimitedError,
+});
+
+gamesRouter.get('/', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const query = ListGamesQuerySchema.parse(req.query);
+    const games = await listInProgressGames(requireUserId(req), query.limit);
+    res.status(200).json(games);
+  } catch (error) {
+    next(error);
+  }
+});
 
 gamesRouter.post(
   '/',
@@ -59,6 +102,7 @@ gamesRouter.get(
 
 gamesRouter.post(
   '/:id/roll',
+  gameplayRateLimiter,
   csrfProtection,
   validateBody(ExpectedVersionSchema),
   async (req: GameActionRequest, res: Response, next: NextFunction): Promise<void> => {
@@ -73,6 +117,7 @@ gamesRouter.post(
 
 gamesRouter.post(
   '/:id/hold',
+  gameplayRateLimiter,
   csrfProtection,
   validateBody(ExpectedVersionSchema),
   async (req: GameActionRequest, res: Response, next: NextFunction): Promise<void> => {

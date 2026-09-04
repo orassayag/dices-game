@@ -1,8 +1,16 @@
 // @vitest-environment node
+import { Prisma } from '@prisma/client';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { getTestPrisma, truncateAll } from '../../__tests__/helpers/testDb.js';
 import { AppError, ForbiddenError } from '../../lib/errors.js';
-import { createGame, getGame, holdGame, rollGame } from '../gameService.js';
+import {
+  createGame,
+  getGame,
+  holdGame,
+  isUniqueConstraintViolation,
+  listInProgressGames,
+  rollGame,
+} from '../gameService.js';
 
 const TARGET_SCORE: number = 100;
 
@@ -138,6 +146,140 @@ describe('gameService', () => {
       expect(held.status).toBe('finished');
       expect(held.winnerSeat).toBe(1);
       expect(held.p1Score).toBe(11);
+    });
+
+    it('should increment the owner wins by exactly one on a winning hold, and never re-increment a stale retry', async () => {
+      const ownerId = await createTestUser('paul');
+      const created = await createGame(ownerId, { targetScore: 10, mode: 'human' });
+      const rolled = await rollGame(created.id, ownerId, created.version, fixedRoller(6, 5));
+
+      const held = await holdGame(created.id, ownerId, rolled.version);
+      expect(held.status).toBe('finished');
+      const winsAfterFirstHold = (
+        await getTestPrisma().user.findUniqueOrThrow({ where: { id: ownerId } })
+      ).wins;
+      expect(winsAfterFirstHold).toBe(1);
+
+      try {
+        await holdGame(created.id, ownerId, rolled.version);
+        expect.unreachable('a stale-version retry should have thrown');
+      } catch (error) {
+        expect((error as AppError).errorCode).toBe('VERSION_CONFLICT');
+      }
+      const winsAfterStaleRetry = (
+        await getTestPrisma().user.findUniqueOrThrow({ where: { id: ownerId } })
+      ).wins;
+      expect(winsAfterStaleRetry).toBe(1);
+    });
+
+    it('should not increment wins on a non-winning hold', async () => {
+      const ownerId = await createTestUser('quinn');
+      const created = await createGame(ownerId, { targetScore: TARGET_SCORE, mode: 'human' });
+      const rolled = await rollGame(created.id, ownerId, created.version, fixedRoller(3, 4));
+
+      await holdGame(created.id, ownerId, rolled.version);
+
+      const wins = (await getTestPrisma().user.findUniqueOrThrow({ where: { id: ownerId } })).wins;
+      expect(wins).toBe(0);
+    });
+  });
+
+  describe('createGame — abandon + create (§7)', () => {
+    it('should abandon the existing in-progress game when creating a new one', async () => {
+      const ownerId = await createTestUser('mallory');
+      const first = await createGame(ownerId, { targetScore: TARGET_SCORE, mode: 'human' });
+
+      const second = await createGame(ownerId, { targetScore: TARGET_SCORE, mode: 'human' });
+
+      expect(second.id).not.toBe(first.id);
+      const firstFetched = await getGame(first.id, ownerId);
+      expect(firstFetched.status).toBe('abandoned');
+    });
+  });
+
+  describe('isUniqueConstraintViolation (§7 — GAME_CONFLICT mapping)', () => {
+    it('should recognize a Prisma P2002 unique-constraint error', () => {
+      const uniqueViolation = new Prisma.PrismaClientKnownRequestError(
+        'Unique constraint failed on the fields: (`owner_user_id`)',
+        { code: 'P2002', clientVersion: '6.19.3' },
+      );
+
+      expect(isUniqueConstraintViolation(uniqueViolation)).toBe(true);
+    });
+
+    it('should reject a Prisma error with a different code', () => {
+      const notFoundError = new Prisma.PrismaClientKnownRequestError('Record not found', {
+        code: 'P2025',
+        clientVersion: '6.19.3',
+      });
+
+      expect(isUniqueConstraintViolation(notFoundError)).toBe(false);
+    });
+
+    it('should reject a plain, non-Prisma error', () => {
+      expect(isUniqueConstraintViolation(new Error('boom'))).toBe(false);
+    });
+  });
+
+  describe('zero-row update — GAME_ABANDONED vs. VERSION_CONFLICT (§6)', () => {
+    it('should throw GAME_ABANDONED, not VERSION_CONFLICT, when the game was abandoned before the action landed', async () => {
+      const ownerId = await createTestUser('oscar');
+      const created = await createGame(ownerId, { targetScore: TARGET_SCORE, mode: 'human' });
+
+      await getTestPrisma().game.update({
+        where: { id: created.id },
+        data: { status: 'abandoned', version: { increment: 1 } },
+      });
+
+      try {
+        await rollGame(created.id, ownerId, created.version, fixedRoller(3, 4));
+        expect.unreachable('rollGame should have thrown');
+      } catch (error) {
+        expect((error as AppError).errorCode).toBe('GAME_ABANDONED');
+      }
+    });
+
+    it('should still throw VERSION_CONFLICT for a plain stale version on an in-progress game', async () => {
+      const ownerId = await createTestUser('peggy');
+      const created = await createGame(ownerId, { targetScore: TARGET_SCORE, mode: 'human' });
+
+      try {
+        await rollGame(created.id, ownerId, created.version + 1, fixedRoller(3, 4));
+        expect.unreachable('rollGame should have thrown');
+      } catch (error) {
+        expect((error as AppError).errorCode).toBe('VERSION_CONFLICT');
+      }
+    });
+  });
+
+  describe('listInProgressGames (§5, §7)', () => {
+    it("should return the owner's in-progress game", async () => {
+      const ownerId = await createTestUser('rachel');
+      const created = await createGame(ownerId, { targetScore: TARGET_SCORE, mode: 'human' });
+
+      const games = await listInProgressGames(ownerId, 10);
+
+      expect(games).toHaveLength(1);
+      expect(games[0]?.id).toBe(created.id);
+    });
+
+    it('should return an empty array when the owner has no in-progress game', async () => {
+      const ownerId = await createTestUser('sam');
+
+      const games = await listInProgressGames(ownerId, 10);
+
+      expect(games).toEqual([]);
+    });
+
+    it('should not include a game abandoned by a subsequent create', async () => {
+      const ownerId = await createTestUser('tina');
+      const first = await createGame(ownerId, { targetScore: TARGET_SCORE, mode: 'human' });
+      await createGame(ownerId, { targetScore: TARGET_SCORE, mode: 'human' });
+
+      const games = await listInProgressGames(ownerId, 10);
+
+      expect(games).toHaveLength(1);
+      expect(games[0]?.id).not.toBe(first.id);
     });
   });
 });

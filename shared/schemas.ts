@@ -112,6 +112,30 @@ export const ExpectedVersionSchema = z
 
 export type ExpectedVersionInput = z.infer<typeof ExpectedVersionSchema>;
 
+const LIST_GAMES_DEFAULT_LIMIT: number = 10;
+const LIST_GAMES_MAX_LIMIT: number = 50;
+
+/**
+ * Query for `GET /games?status=in_progress`. `in_progress` is the only status this
+ * endpoint lists (the DB's one-live-game partial unique index already caps the result at
+ * one row per owner) — `limit` exists to bound the response shape, not because more than
+ * one row is expected.
+ */
+export const ListGamesQuerySchema = z
+  .object({
+    status: z.literal('in_progress'),
+    limit: z.coerce
+      .number()
+      .int()
+      .positive()
+      .max(LIST_GAMES_MAX_LIMIT)
+      .default(LIST_GAMES_DEFAULT_LIMIT)
+      .describe(`Bounds the response length; defaults to ${LIST_GAMES_DEFAULT_LIMIT}.`),
+  })
+  .strict();
+
+export type ListGamesQuery = z.infer<typeof ListGamesQuerySchema>;
+
 const USERNAME_MIN_LENGTH: number = 3;
 const USERNAME_MAX_LENGTH: number = 30;
 const PASSWORD_MIN_LENGTH: number = 8;
