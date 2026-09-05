@@ -1,8 +1,8 @@
-# Two-Player Dice Game ("Pig") — Plan
+# Roeto Dices Game — Plan
 
 ## Summary
 
-Build a "Pig"-variant two-dice game where **all rules live in a backend API** and a
+Build "Roeto Dices Game", a two-dice game where **all rules live in a backend API** and a
 **React frontend only renders state and calls the API**. Per the assignment's "simulate
 players on the same page", a single authenticated user drives both seats on one screen:
 they log in once, create a game, and act as Player 1 and Player 2 by clicking. The server

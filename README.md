@@ -1,7 +1,9 @@
-# Dices Game
+# Roeto Dices Game
 
-A two-player "Pig" dice game. All game rules live in the backend API; the React frontend
+A two-player dice game. All game rules live in the backend API; the React frontend
 only displays state and calls the API.
+
+![App preview](misc/preview.png)
 
 ## Running locally
 

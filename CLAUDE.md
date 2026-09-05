@@ -51,7 +51,7 @@ gotchas below.
 
 ## Assignment spec (`roeto-home-assignment.pdf`)
 
-Build a two-player dice game ("Pig" variant): all game logic lives in a backend API; a
+Build "Roeto Dices Game", a two-player dice game: all game logic lives in a backend API; a
 React frontend only displays state and calls the API.
 
 **Game rules:**
@@ -132,8 +132,9 @@ Read these before making changes anywhere in the repo.
 
 ### Project-Specific Notes
 
-Two-player "Pig" dice game where **all rules live in the backend** and the React frontend
-only renders server state. Single authenticated user drives both seats on one screen.
+"Roeto Dices Game" — a two-player dice game where **all rules live in the backend** and the
+React frontend only renders server state. Single authenticated user drives both seats on
+one screen.
 
 Key decisions locked by the plan (see `docs/plans/plan_v6.md`):
 - **Cookie-based JWT auth** (`HttpOnly; Secure; SameSite=Lax`) — no token in `localStorage`, no `Authorization` header. Hardened, user-bound CSRF token (server-verified HMAC, `__Host-` prefix in prod, `Origin`/`Referer` check) covering **every** state-changing POST including `/auth/login`.

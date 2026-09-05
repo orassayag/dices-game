@@ -331,7 +331,7 @@ Creative additions / new items (sorted by rough token cost relative to a 5 h Cla
 - Double-6 animation + short action lock + sound effect (frontend only, driven by server flag) — ~8 %  
 - Spectator mode / shareable game link (read-only token) — ~12 %  
 - Undo last action (server-side history stack, limited to current turn) — ~10 %  
-- Configurable dice faces or “pig” variant rules as a game option — ~15 %  
+- Configurable dice faces or "Roeto Dices Game" variant rules as a game option — ~15 %
 - WebSocket push for the same-page two-user simulation (optional polish) — ~20 %  
 - Full OpenAPI + auto-generated TS client — ~10 %  
 
