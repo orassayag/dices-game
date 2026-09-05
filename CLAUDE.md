@@ -137,8 +137,8 @@ React frontend only renders server state. Single authenticated user drives both 
 one screen.
 
 Key decisions locked by the plan (see `docs/plans/plan_v6.md`):
-- **Cookie-based JWT auth** (`HttpOnly; Secure; SameSite=Lax`) — no token in `localStorage`, no `Authorization` header. Hardened, user-bound CSRF token (server-verified HMAC, `__Host-` prefix in prod, `Origin`/`Referer` check) covering **every** state-changing POST including `/auth/login`.
-- **Credentialed CORS pinned to an exact origin** (`FRONTEND_URL`), never `'*'`; production **refuses to boot** if `FRONTEND_URL` is unset or contains `localhost`. Required even though `fullstack-lite`'s own baseline treats CORS as out-of-scope (dev's `client:5173` → `server:3000` split needs it; the boilerplate's default same-origin production serving does not remove the requirement for dev/CSRF).
+- **Cookie-based JWT auth** (`HttpOnly; Secure; SameSite=Lax`) — no token in `localStorage`, no `Authorization` header. **CSRF protection was removed** (this is a demo project) — there is no CSRF token, `X-CSRF-Token` header, `Origin`/`Referer` check, or `/auth/csrf` endpoint. `SameSite=Lax` on the auth cookie is the only remaining CSRF mitigation. A production build would need real CSRF defenses re-added.
+- **Credentialed CORS pinned to an exact origin** (`FRONTEND_URL`), never `'*'`; production **refuses to boot** if `FRONTEND_URL` is unset or contains `localhost`. Required even though `fullstack-lite`'s own baseline treats CORS as out-of-scope (dev's `client:5173` → `server:3000` split needs it; the boilerplate's default same-origin production serving does not remove the requirement for dev).
 - **`tokenVersion` revocation** checked on every request, with a controlled **`503 SERVICE_UNAVAILABLE`** (never a misleading `401`) when the backing DB read is unavailable.
 - **Pure domain engine** (`server/domain/`) — rules are pure functions taking state + injected `diceRoller`; outcomes mapped field-by-field to Prisma columns.
 - **Contract in `shared/`** — Zod schemas are the single source of truth; DTOs are `z.infer<...>`. The stable `ErrorCode` union + one HTTP-status table are read by both the error middleware and the frontend discriminator. Success = bare DTO; error = `{ error: { code, message } }` — **replaces** the boilerplate's default `{ error: string }` / `{ error: 'Validation failed', details }` shapes in `server/middleware/errorHandler.ts`.
@@ -147,7 +147,7 @@ Key decisions locked by the plan (see `docs/plans/plan_v6.md`):
 - **AI opponent** (`ai-turn` only) is an LLM adapter with a **mandatory deterministic heuristic fallback** (offline-safe demo/CI), decision computed outside the DB transaction under a 3s `Promise.race` deadline, single-flight claim + bounded semaphore released on real settlement, and a win-safe recoverable per-game move cap (counts successful moves, forfeits before the cap without incrementing or keeping the round score).
 - **Prisma + PostgreSQL** with DB-level CHECK/trigger invariants (finished-game immutability via a distinct SQLSTATE, one-live-game partial unique index, value ranges, winner⇔score consistency), each mapped to its own error code — **replaces** the boilerplate's default `node:sqlite`.
 
-Milestones: M0 scaffold/decisions → M1 auth+CSRF → M2 shared contract → M3a/M3b game → M4 frontend (first submittable) → M5 AI opponent.
+Milestones: M0 scaffold/decisions → M1 auth → M2 shared contract → M3a/M3b game → M4 frontend (first submittable) → M5 AI opponent.
 
 ### Folder Structure
 Single flat package (not a pnpm workspace). `server/`, `client/`, `shared/` each own their
@@ -196,7 +196,7 @@ per-folder `CLAUDE.md` split.
 ### Ask-the-human-first list (boilerplate default — largely pre-decided by the plan)
 The boilerplate flags auth strategy, DB/ORM, deployment target, rate limiting, CSS framework,
 state management, and observability as "ask before implementing." For this project **the plan
-has already decided** all of these (cookie-JWT + hardened CSRF, Prisma/PostgreSQL, Tailwind
+has already decided** all of these (cookie-JWT, Prisma/PostgreSQL, Tailwind
 v4, in-memory rate limiting, no extra state library) — implement per `docs/plans/plan_v6.md`
 rather than re-asking, except where the plan itself marks something open (see its
 **Open Questions** section, e.g. which free-tier LLM provider to wire for M5).
@@ -205,7 +205,7 @@ rather than re-asking, except where the plan itself marks something open (see it
 ## Known gotchas
 
 - **Response-envelope mismatch (fullstack-lite → plan contract) — implemented at M0.** `server/middleware/errorHandler.ts` now returns the plan's bare-DTO-on-success / `{ error: { code, message } }`-on-error contract; `code` comes from `shared/errors.ts`'s `ErrorCode` union via `AppError` subclasses in `server/lib/errors.ts`, not a statusCode→code guess. (lesson L001)
-- **CORS is not "out of scope" here despite the boilerplate's default — wired at M0.** `fullstack-lite` treats CORS as unnecessary (same-origin prod serving, dev proxy). `server/app.ts` runs credentialed CORS pinned to `env.frontendUrl` (never `'*'`) — dev runs `client:5173`/`server:3000` as separate origins, and the CSRF `Origin` check (landing at M1b) will reuse the same allowlist. (lesson L002)
+- **CORS is not "out of scope" here despite the boilerplate's default — wired at M0.** `fullstack-lite` treats CORS as unnecessary (same-origin prod serving, dev proxy). `server/app.ts` runs credentialed CORS pinned to `env.frontendUrl` (never `'*'`) — dev runs `client:5173`/`server:3000` as separate origins. (lesson L002)
 - **Gate fetch-on-mount to preserve in-memory state.** For a screen that must both fetch fresh and survive navigation (e.g. resume), gate the query (`enabled: …`/emptiness check) rather than an unconditional mount fetch that clobbers in-memory state. (lesson L003)
 - **Keep feature components router-agnostic.** Pass an `onSelect(id)` callback rather than importing `react-router-dom` inside a reusable feature component; only pages/layouts navigate. (lesson L004)
 - **Never name a data file literally `tsconfig.json` under `src/`** — it breaks Vite/tsconfck detection. Use a distinct suffix (`tsconfig.kb.json`). (lesson L011)

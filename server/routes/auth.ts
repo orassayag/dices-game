@@ -5,10 +5,8 @@ import type { AuthCredentialsInput, AuthResponse } from '../../shared/index.js';
 import { AuthCredentialsInputSchema } from '../../shared/index.js';
 import { env } from '../config/env.js';
 import { AUTH_TOKEN_LIFETIME_SECONDS, normalizeUsernameKey } from '../lib/authCrypto.js';
-import { generatePreAuthCsrfToken, generateUserBoundCsrfToken } from '../lib/csrfCrypto.js';
 import { RateLimitedError } from '../lib/errors.js';
 import { requireAuth, requireUserId } from '../middleware/auth.js';
-import { csrfProtection } from '../middleware/csrf.js';
 import { validateBody } from '../middleware/validate.js';
 import { getAuthenticatedUser, loginUser, registerUser } from '../services/authService.js';
 
@@ -46,8 +44,6 @@ const loginRateLimiter = rateLimit({
   handler: rejectWithRateLimitedError,
 });
 
-const PRE_AUTH_CSRF_COOKIE_MAX_AGE_MS: number = 10 * 60 * 1000;
-
 function authCookieOptions(): {
   httpOnly: true;
   secure: boolean;
@@ -64,27 +60,9 @@ function setAuthCookie(res: Response, authToken: string): void {
   });
 }
 
-// Unlike the auth cookie, this one is NOT httpOnly — it must stay readable by JS, which
-// echoes it into the X-CSRF-Token header.
-function csrfCookieOptions(): { httpOnly: false; secure: boolean; sameSite: 'lax'; path: string } {
-  return { httpOnly: false, secure: env.cookie.secure, sameSite: 'lax', path: '/' };
-}
-
-function setCsrfCookie(res: Response, csrfToken: string, maxAgeMs: number): void {
-  res.cookie(env.cookie.csrfCookieName, csrfToken, { ...csrfCookieOptions(), maxAge: maxAgeMs });
-}
-
 type AuthRequest = Request<Record<string, never>, unknown, AuthCredentialsInput>;
 
 export const authRouter: Router = Router();
-
-// The client fetches this before submitting login/register, so a purely cross-site
-// auto-submit (no prior same-origin fetch to read the token) can never supply a valid
-// X-CSRF-Token.
-authRouter.get('/csrf', (_req: Request, res: Response): void => {
-  setCsrfCookie(res, generatePreAuthCsrfToken(), PRE_AUTH_CSRF_COOKIE_MAX_AGE_MS);
-  res.status(204).end();
-});
 
 authRouter.get(
   '/me',
@@ -103,14 +81,12 @@ authRouter.get(
 authRouter.post(
   '/register',
   registerRateLimiter,
-  csrfProtection,
   validateBody(AuthCredentialsInputSchema),
   async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { username, password } = req.body;
       const user = await registerUser(username, password);
       setAuthCookie(res, user.authToken);
-      setCsrfCookie(res, generateUserBoundCsrfToken(user.id), AUTH_TOKEN_LIFETIME_SECONDS * 1000);
       const body: AuthResponse = { user: { id: user.id, username: user.username } };
       res.status(201).json(body);
     } catch (error) {
@@ -122,14 +98,12 @@ authRouter.post(
 authRouter.post(
   '/login',
   loginRateLimiter,
-  csrfProtection,
   validateBody(AuthCredentialsInputSchema),
   async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { username, password } = req.body;
       const user = await loginUser(username, password);
       setAuthCookie(res, user.authToken);
-      setCsrfCookie(res, generateUserBoundCsrfToken(user.id), AUTH_TOKEN_LIFETIME_SECONDS * 1000);
       const body: AuthResponse = { user: { id: user.id, username: user.username } };
       res.status(200).json(body);
     } catch (error) {
@@ -138,10 +112,7 @@ authRouter.post(
   },
 );
 
-// requireAuth must run before csrfProtection: the CSRF check needs req.userId to
-// recompute the expected HMAC against the authenticated subject.
-authRouter.post('/logout', requireAuth, csrfProtection, (_req: Request, res: Response): void => {
+authRouter.post('/logout', requireAuth, (_req: Request, res: Response): void => {
   res.clearCookie(env.cookie.authCookieName, authCookieOptions());
-  res.clearCookie(env.cookie.csrfCookieName, csrfCookieOptions());
   res.status(204).end();
 });

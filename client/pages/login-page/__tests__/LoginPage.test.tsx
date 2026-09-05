@@ -1,24 +1,13 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LoginPage } from '../LoginPage';
 import { ApiError } from '../../../api/apiClient';
 import * as authApi from '../../../api/authApi';
 
 describe('LoginPage', () => {
-  beforeEach(() => {
-    vi.spyOn(authApi, 'fetchCsrfToken').mockResolvedValue(undefined);
-  });
-
   afterEach(() => {
     vi.restoreAllMocks();
-  });
-
-  it('should disable the submit button until the pre-auth CSRF token is ready', async () => {
-    render(<LoginPage onAuthenticated={vi.fn()} />);
-
-    expect(screen.getByRole('button', { name: 'Log in' })).toBeDisabled();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Log in' })).toBeEnabled());
   });
 
   it('should call login and report the authenticated user on submit', async () => {
@@ -26,7 +15,6 @@ describe('LoginPage', () => {
     const onAuthenticated = vi.fn();
     vi.spyOn(authApi, 'login').mockResolvedValue({ user: { id: '1', username: 'alice' } });
     render(<LoginPage onAuthenticated={onAuthenticated} />);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Log in' })).toBeEnabled());
 
     await user.type(screen.getByLabelText('Username'), 'alice');
     await user.type(screen.getByLabelText('Password'), 'password123');
@@ -43,7 +31,6 @@ describe('LoginPage', () => {
       .spyOn(authApi, 'register')
       .mockResolvedValue({ user: { id: '2', username: 'bob' } });
     render(<LoginPage onAuthenticated={vi.fn()} />);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Log in' })).toBeEnabled());
 
     await user.click(screen.getByRole('button', { name: 'Sign In' }));
     await user.type(screen.getByLabelText('Username'), 'bob');
@@ -59,7 +46,6 @@ describe('LoginPage', () => {
     const user = userEvent.setup();
     vi.spyOn(authApi, 'login').mockRejectedValue(new ApiError('INVALID_CREDENTIALS', 'nope', 401));
     render(<LoginPage onAuthenticated={vi.fn()} />);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Log in' })).toBeEnabled());
 
     await user.type(screen.getByLabelText('Username'), 'alice');
     await user.type(screen.getByLabelText('Password'), 'password123');

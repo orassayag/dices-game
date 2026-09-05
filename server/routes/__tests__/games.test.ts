@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../../app.js';
 import { truncateAll } from '../../__tests__/helpers/testDb.js';
 import { authedGet, authedPost, registerTestUser } from '../../__tests__/helpers/authedSession.js';
-import { TEST_FRONTEND_ORIGIN } from '../../__tests__/helpers/csrf.js';
 
 describe('POST /games', () => {
   beforeEach(async () => {
@@ -37,19 +36,6 @@ describe('POST /games', () => {
     const app = createApp();
     const response = await request(app).post('/games').send({ targetScore: 100, mode: 'human' });
     expect(response.status).toBe(401);
-  });
-
-  it('should reject a request missing the CSRF token with 403', async () => {
-    const app = createApp();
-    const session = await registerTestUser(app, 'bob');
-
-    const response = await request(app)
-      .post('/games')
-      .set('Origin', TEST_FRONTEND_ORIGIN)
-      .set('Cookie', session.cookieHeader)
-      .send({ targetScore: 100, mode: 'human' });
-
-    expect(response.status).toBe(403);
   });
 
   it('should abandon the previous in-progress game when creating a new one (§7)', async () => {

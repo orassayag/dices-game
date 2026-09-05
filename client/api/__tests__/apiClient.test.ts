@@ -14,18 +14,8 @@ function mockFetchResponse(
   } as Response;
 }
 
-function clearCookies(): void {
-  document.cookie.split('; ').forEach((entry) => {
-    const name = entry.split('=')[0];
-    if (name) {
-      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
-    }
-  });
-}
-
 describe('apiRequest', () => {
   beforeEach(() => {
-    clearCookies();
     vi.stubGlobal('fetch', vi.fn());
   });
 
@@ -40,41 +30,6 @@ describe('apiRequest', () => {
 
     const [, options] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
     expect(options.credentials).toBe('include');
-  });
-
-  it('should not attach an X-CSRF-Token header on a GET request', async () => {
-    document.cookie = 'csrfToken=abc123';
-    vi.mocked(fetch).mockResolvedValueOnce(mockFetchResponse(200, { ok: true }));
-
-    await apiRequest('/games');
-
-    const [, options] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
-    const headers = options.headers as Record<string, string>;
-    expect(headers['X-CSRF-Token']).toBeUndefined();
-  });
-
-  it('should attach the X-CSRF-Token header from the dev csrfToken cookie on a POST', async () => {
-    document.cookie = 'csrfToken=abc123';
-    vi.mocked(fetch).mockResolvedValueOnce(mockFetchResponse(201, { id: '1' }));
-
-    await apiRequest('/games', { method: 'POST', body: { targetScore: 100 } });
-
-    const [, options] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
-    const headers = options.headers as Record<string, string>;
-    expect(headers['X-CSRF-Token']).toBe('abc123');
-  });
-
-  it('should attach the X-CSRF-Token header from the production __Host-csrfToken cookie', async () => {
-    // jsdom enforces the real __Host- prefix rules (Secure + https origin), which this
-    // test's http origin can't satisfy via a plain document.cookie assignment.
-    vi.spyOn(document, 'cookie', 'get').mockReturnValue('__Host-csrfToken=prodtoken');
-    vi.mocked(fetch).mockResolvedValueOnce(mockFetchResponse(200, { ok: true }));
-
-    await apiRequest('/games/1/roll', { method: 'POST', body: { expectedVersion: 0 } });
-
-    const [, options] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
-    const headers = options.headers as Record<string, string>;
-    expect(headers['X-CSRF-Token']).toBe('prodtoken');
   });
 
   it('should throw an ApiError carrying the envelope code/message/status on a non-2xx response', async () => {

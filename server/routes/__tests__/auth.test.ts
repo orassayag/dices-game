@@ -4,12 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../../app.js';
 import { truncateAll } from '../../__tests__/helpers/testDb.js';
 import * as authCrypto from '../../lib/authCrypto.js';
-import { authedGet, registerTestUser } from '../../__tests__/helpers/authedSession.js';
 import {
+  authedGet,
   extractSetCookieHeaders,
-  fetchPreAuthCsrf,
-  withCsrfHeaders,
-} from '../../__tests__/helpers/csrf.js';
+  registerTestUser,
+} from '../../__tests__/helpers/authedSession.js';
 
 const CREDENTIALS = { username: 'alice', password: 'correct horse battery staple' };
 
@@ -17,13 +16,11 @@ async function register(
   app: ReturnType<typeof createApp>,
   body: Record<string, unknown> = CREDENTIALS,
 ) {
-  const csrf = await fetchPreAuthCsrf(app);
-  return await withCsrfHeaders(request(app).post('/auth/register'), csrf).send(body);
+  return await request(app).post('/auth/register').send(body);
 }
 
 async function login(app: ReturnType<typeof createApp>, body: Record<string, unknown>) {
-  const csrf = await fetchPreAuthCsrf(app);
-  return await withCsrfHeaders(request(app).post('/auth/login'), csrf).send(body);
+  return await request(app).post('/auth/login').send(body);
 }
 
 describe('POST /auth/register', () => {
@@ -116,8 +113,7 @@ describe('POST /auth/logout', () => {
 
   it('should reject logout with no auth cookie', async () => {
     const app = createApp();
-    const csrf = await fetchPreAuthCsrf(app);
-    const response = await withCsrfHeaders(request(app).post('/auth/logout'), csrf);
+    const response = await request(app).post('/auth/logout');
     expect(response.status).toBe(401);
   });
 });

@@ -26,7 +26,6 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
     username,
     password,
     showPassword,
-    csrfReady,
     submitting,
     errorMessage,
     fieldErrors,
@@ -129,7 +128,7 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
 
         <Button
           type="submit"
-          disabled={!csrfReady || submitting}
+          disabled={submitting}
           icon={<KeyRound size={18} aria-hidden="true" />}
         >
           {mode === 'login' ? 'Log in' : 'Sign In'}

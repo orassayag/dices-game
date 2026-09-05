@@ -6,7 +6,6 @@ import request from 'supertest';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../../app.js';
 import { truncateAll } from '../../__tests__/helpers/testDb.js';
-import { fetchPreAuthCsrf, withCsrfHeaders } from '../../__tests__/helpers/csrf.js';
 
 const REGISTER_LIMIT: number = 10;
 
@@ -18,18 +17,13 @@ describe('POST /auth/register rate limit (§10)', () => {
   it('should allow up to the limit and 429 the request after it, from the same IP', async () => {
     const app = createApp();
     for (let i = 0; i < REGISTER_LIMIT; i += 1) {
-      const csrf = await fetchPreAuthCsrf(app);
-      const response = await withCsrfHeaders(request(app).post('/auth/register'), csrf).send({
+      const response = await request(app).post('/auth/register').send({
         username: `user-${i}`,
         password: 'a valid password 1',
       });
       expect(response.status).toBe(201);
     }
-    const overLimitCsrf = await fetchPreAuthCsrf(app);
-    const overLimit = await withCsrfHeaders(
-      request(app).post('/auth/register'),
-      overLimitCsrf,
-    ).send({
+    const overLimit = await request(app).post('/auth/register').send({
       username: 'user-overflow',
       password: 'a valid password 1',
     });

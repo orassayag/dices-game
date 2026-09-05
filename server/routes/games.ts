@@ -9,7 +9,6 @@ import {
 } from '../../shared/index.js';
 import { RateLimitedError } from '../lib/errors.js';
 import { requireAuth, requireUserId } from '../middleware/auth.js';
-import { csrfProtection } from '../middleware/csrf.js';
 import { validateBody } from '../middleware/validate.js';
 import {
   createGame,
@@ -22,8 +21,6 @@ import { aiTurnGame } from '../services/ai/aiTurnService.js';
 
 export const gamesRouter: Router = Router();
 
-// csrfProtection (added per-route below) needs req.userId already set for its
-// user-bound HMAC check, so requireAuth must run first.
 gamesRouter.use(requireAuth);
 
 type GameIdParams = { id: string };
@@ -58,7 +55,6 @@ gamesRouter.get('/', async (req: Request, res: Response, next: NextFunction): Pr
 
 gamesRouter.post(
   '/',
-  csrfProtection,
   validateBody(CreateGameInputSchema),
   async (req: CreateGameRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -85,7 +81,6 @@ gamesRouter.get(
 gamesRouter.post(
   '/:id/roll',
   gameplayRateLimiter,
-  csrfProtection,
   validateBody(ExpectedVersionSchema),
   async (req: GameActionRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -100,7 +95,6 @@ gamesRouter.post(
 gamesRouter.post(
   '/:id/hold',
   gameplayRateLimiter,
-  csrfProtection,
   validateBody(ExpectedVersionSchema),
   async (req: GameActionRequest, res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -115,7 +109,6 @@ gamesRouter.post(
 gamesRouter.post(
   '/:id/ai-turn',
   gameplayRateLimiter,
-  csrfProtection,
   validateBody(ExpectedVersionSchema),
   async (req: GameActionRequest, res: Response, next: NextFunction): Promise<void> => {
     try {

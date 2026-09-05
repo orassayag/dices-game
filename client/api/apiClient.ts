@@ -7,8 +7,6 @@ const DEV_API_BASE_URL: string = 'http://localhost:3000';
 const DEV_CLIENT_PORT: string = '5173';
 const API_BASE_URL: string = window.location.port === DEV_CLIENT_PORT ? DEV_API_BASE_URL : '';
 
-const STATE_CHANGING_METHODS: ReadonlySet<string> = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
-const CSRF_TOKEN_HEADER_NAME: string = 'X-CSRF-Token';
 const NO_CONTENT_STATUS: number = 204;
 
 const SERVICE_UNAVAILABLE_MAX_RETRIES: number = 2;
@@ -28,18 +26,6 @@ export class ApiError extends Error {
 
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
-
-// Checks both names: the server calls this cookie `csrfToken` in dev and
-// `__Host-csrfToken` in production.
-function readCsrfCookie(): string | undefined {
-  const match = document.cookie
-    .split('; ')
-    .find((entry) => entry.startsWith('csrfToken=') || entry.startsWith('__Host-csrfToken='));
-  if (!match) {
-    return undefined;
-  }
-  return decodeURIComponent(match.slice(match.indexOf('=') + 1));
 }
 
 async function parseErrorResponse(response: Response): Promise<ApiError> {
@@ -67,12 +53,6 @@ export async function apiRequest(path: string, options: RequestOptions = {}): Pr
   const headers: Record<string, string> = {};
   if (options.body !== undefined) {
     headers['Content-Type'] = 'application/json';
-  }
-  if (STATE_CHANGING_METHODS.has(method)) {
-    const csrfToken = readCsrfCookie();
-    if (csrfToken) {
-      headers[CSRF_TOKEN_HEADER_NAME] = csrfToken;
-    }
   }
 
   let lastError: ApiError | undefined;

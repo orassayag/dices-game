@@ -1,34 +1,43 @@
 import type { Express } from 'express';
 import request from 'supertest';
 import { env } from '../../config/env.js';
-import {
-  CSRF_HEADER_NAME,
-  TEST_FRONTEND_ORIGIN,
-  extractCookieValue,
-  extractSetCookieHeaders,
-  fetchPreAuthCsrf,
-  withCsrfHeaders,
-} from './csrf.js';
 
 export interface TestSession {
   userId: string;
   cookieHeader: string;
-  csrfToken: string;
+}
+
+// supertest types `set-cookie` as `string | string[] | undefined`.
+export function extractSetCookieHeaders(response: request.Response): string[] {
+  const raw: unknown = response.headers['set-cookie'];
+  if (Array.isArray(raw)) {
+    return raw;
+  }
+  if (typeof raw === 'string') {
+    return [raw];
+  }
+  return [];
+}
+
+export function extractCookieValue(setCookieHeaders: string[], cookieName: string): string {
+  const pair = setCookieHeaders
+    .map((header) => header.split(';')[0] ?? '')
+    .find((candidate) => candidate.startsWith(`${cookieName}=`));
+  if (pair === undefined) {
+    throw new Error(`Expected a "${cookieName}" cookie among the response's Set-Cookie headers.`);
+  }
+  return pair.slice(cookieName.length + 1);
 }
 
 export async function registerTestUser(app: Express, username: string): Promise<TestSession> {
-  const preAuthCsrf = await fetchPreAuthCsrf(app);
-  const response = await withCsrfHeaders(request(app).post('/auth/register'), preAuthCsrf).send({
+  const response = await request(app).post('/auth/register').send({
     username,
     password: 'correct horse battery staple',
   });
-  const setCookie = extractSetCookieHeaders(response);
-  const authToken = extractCookieValue(setCookie, env.cookie.authCookieName);
-  const csrfToken = extractCookieValue(setCookie, env.cookie.csrfCookieName);
+  const authToken = extractCookieValue(extractSetCookieHeaders(response), env.cookie.authCookieName);
   return {
     userId: (response.body as { user: { id: string } }).user.id,
-    cookieHeader: `${env.cookie.authCookieName}=${authToken}; ${env.cookie.csrfCookieName}=${csrfToken}`,
-    csrfToken,
+    cookieHeader: `${env.cookie.authCookieName}=${authToken}`,
   };
 }
 
@@ -37,9 +46,5 @@ export function authedGet(app: Express, path: string, session: TestSession): req
 }
 
 export function authedPost(app: Express, path: string, session: TestSession): request.Test {
-  return request(app)
-    .post(path)
-    .set('Origin', TEST_FRONTEND_ORIGIN)
-    .set(CSRF_HEADER_NAME, session.csrfToken)
-    .set('Cookie', session.cookieHeader);
+  return request(app).post(path).set('Cookie', session.cookieHeader);
 }

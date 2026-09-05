@@ -1,6 +1,6 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { ApiError } from '../api/apiClient';
-import { fetchCsrfToken, login, register } from '../api/authApi';
+import { login, register } from '../api/authApi';
 
 export type AuthMode = 'login' | 'register';
 
@@ -42,7 +42,6 @@ interface UseAuthFormResult {
   username: string;
   password: string;
   showPassword: boolean;
-  csrfReady: boolean;
   submitting: boolean;
   errorMessage: string | null;
   fieldErrors: FieldErrors;
@@ -60,7 +59,6 @@ export function useAuthForm({ onAuthenticated }: UseAuthFormOptions): UseAuthFor
   const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [showPassword, setShowPassword] = useState<boolean>(false);
-  const [csrfReady, setCsrfReady] = useState<boolean>(false);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -68,12 +66,6 @@ export function useAuthForm({ onAuthenticated }: UseAuthFormOptions): UseAuthFor
   // the shake animation even when the error stays set across repeat submits.
   const [usernameShakeKey, setUsernameShakeKey] = useState<number>(0);
   const [passwordShakeKey, setPasswordShakeKey] = useState<number>(0);
-
-  useEffect(() => {
-    fetchCsrfToken()
-      .then(() => setCsrfReady(true))
-      .catch(() => setErrorMessage('Could not reach the server. Please refresh and try again.'));
-  }, []);
 
   function validateFields(): boolean {
     const errors: FieldErrors = {};
@@ -149,7 +141,6 @@ export function useAuthForm({ onAuthenticated }: UseAuthFormOptions): UseAuthFor
     username,
     password,
     showPassword,
-    csrfReady,
     submitting,
     errorMessage,
     fieldErrors,

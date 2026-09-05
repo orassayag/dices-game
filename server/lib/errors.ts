@@ -32,13 +32,6 @@ export class UnauthorizedError extends AppError {
   }
 }
 
-export class CsrfError extends AppError {
-  constructor(message: string, context: Omit<AppErrorContext, 'errorCode'> = {}) {
-    super(message, { ...context, errorCode: 'CSRF_INVALID' });
-    this.name = 'CsrfError';
-  }
-}
-
 export class ForbiddenError extends AppError {
   constructor(message: string, context: Omit<AppErrorContext, 'errorCode'> = {}) {
     super(message, { ...context, errorCode: 'FORBIDDEN' });

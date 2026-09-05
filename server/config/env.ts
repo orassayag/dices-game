@@ -23,7 +23,6 @@ export interface Env {
   cookie: {
     secure: boolean;
     authCookieName: string;
-    csrfCookieName: string;
   };
 }
 
@@ -104,8 +103,6 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     cookie: {
       secure: isProduction,
       authCookieName: 'token',
-      // __Host- requires Secure, so it's only usable in production.
-      csrfCookieName: isProduction ? '__Host-csrfToken' : 'csrfToken',
     },
   };
 }
