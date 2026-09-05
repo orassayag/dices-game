@@ -33,6 +33,16 @@ describe('apiRequest', () => {
     expect(options.credentials).toBe('include');
   });
 
+  it('should set a JSON Content-Type header and serialize the body when a body is given', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(mockFetchResponse(200, { ok: true }));
+
+    await apiRequest('/games', { method: 'POST', body: { targetScore: 100 } });
+
+    const [, options] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
+    expect((options.headers as Record<string, string>)['Content-Type']).toBe('application/json');
+    expect(options.body).toBe(JSON.stringify({ targetScore: 100 }));
+  });
+
   it('should throw an ApiError carrying the envelope code/message/status on a non-2xx response', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
       mockFetchResponse(404, { error: { code: 'GAME_NOT_FOUND', message: 'Game not found.' } }),

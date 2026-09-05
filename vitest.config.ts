@@ -6,8 +6,15 @@ export default defineConfig({
     coverage: {
       provider: 'istanbul',
       include: ['server/**/*.ts', 'shared/**/*.ts', 'client/**/*.{ts,tsx}'],
-      exclude: ['**/__tests__/**', '**/prisma/migrations/**'],
-      thresholds: { lines: 60, functions: 60, branches: 50 },
+      exclude: [
+        '**/__tests__/**',
+        '**/prisma/migrations/**',
+        // Process/DOM bootstrap glue: no branching logic, only exercised by a real
+        // runtime (listen/process handlers, ReactDOM root mount), not unit tests.
+        'server/index.ts',
+        'client/main.tsx',
+      ],
+      thresholds: { statements: 90, lines: 90, functions: 90, branches: 90 },
       reporter: ['text'],
     },
     // Must be set at root, not per-project — Vitest resolves fileParallelism globally,
@@ -23,6 +30,7 @@ export default defineConfig({
         test: {
           name: 'web',
           environment: 'jsdom',
+          environmentOptions: { jsdom: { url: 'http://localhost:3000/' } },
           globals: true,
           include: ['client/**/__tests__/**/*.{test,spec}.{ts,tsx}'],
           setupFiles: ['vitest.setup.ts'],

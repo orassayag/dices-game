@@ -53,4 +53,32 @@ describe('LoginPage', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Invalid username or password.');
   });
+
+  it('should show inline field errors when submitting an empty form', async () => {
+    const user = userEvent.setup();
+    render(<LoginPage onAuthenticated={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Log in' }));
+
+    const alerts = await screen.findAllByRole('alert');
+    expect(alerts.some((node) => node.textContent === 'Username is required.')).toBe(true);
+    expect(alerts.some((node) => node.textContent === 'Password is required.')).toBe(true);
+  });
+
+  it('should reveal the password-strength hint and toggle visibility in register mode', async () => {
+    const user = userEvent.setup();
+    render(<LoginPage onAuthenticated={vi.fn()} />);
+
+    await user.click(screen.getByRole('button', { name: 'Sign In' }));
+    expect(screen.getByText(/At least 8 characters/)).toBeInTheDocument();
+
+    const passwordInput = screen.getByLabelText('Password');
+    expect(passwordInput).toHaveAttribute('type', 'password');
+
+    await user.click(screen.getByRole('button', { name: 'Show password' }));
+    expect(passwordInput).toHaveAttribute('type', 'text');
+
+    await user.click(screen.getByRole('button', { name: 'Hide password' }));
+    expect(passwordInput).toHaveAttribute('type', 'password');
+  });
 });

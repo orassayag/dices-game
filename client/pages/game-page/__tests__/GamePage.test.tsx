@@ -5,6 +5,7 @@ import type { GameStateDto } from '../../../../shared/index';
 import { GamePage } from '../GamePage';
 import { ApiError } from '../../../api/apiClient';
 import * as gamesApi from '../../../api/gamesApi';
+import * as authApi from '../../../api/authApi';
 
 const USER = { id: 'u1', username: 'alice' };
 
@@ -134,6 +135,35 @@ describe('GamePage', () => {
     await user.click(screen.getByRole('button', { name: 'Roll' }));
 
     await waitFor(() => expect(rollSpy).toHaveBeenCalledWith('g1', 3));
+  });
+
+  it('should call holdGame with the current id and version when Hold is clicked', async () => {
+    vi.spyOn(gamesApi, 'listInProgressGames').mockResolvedValue([
+      freshGame({ version: 3, roundScore: 5 }),
+    ]);
+    const holdSpy = vi
+      .spyOn(gamesApi, 'holdGame')
+      .mockResolvedValue({ state: freshGame({ version: 4 }), versionConflictRecovered: false });
+    const user = userEvent.setup();
+    render(<GamePage user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }));
+
+    await user.click(screen.getByRole('button', { name: 'Hold' }));
+
+    await waitFor(() => expect(holdSpy).toHaveBeenCalledWith('g1', 3));
+  });
+
+  it('should log out and notify when Logout is clicked', async () => {
+    vi.spyOn(gamesApi, 'listInProgressGames').mockResolvedValue([]);
+    vi.spyOn(authApi, 'logout').mockResolvedValue(undefined);
+    const onLogout = vi.fn();
+    const user = userEvent.setup();
+    render(<GamePage user={USER} onSessionExpired={vi.fn()} onLogout={onLogout} />);
+    await screen.findByRole('heading', { name: 'New Game' });
+
+    await user.click(screen.getByRole('button', { name: 'Logout' }));
+
+    await waitFor(() => expect(onLogout).toHaveBeenCalled());
   });
 
   it('should route back to the login screen on an UNAUTHORIZED error', async () => {
