@@ -1,9 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
-// Two projects (plan_v6.md §12): `web` renders components under jsdom; `api` runs
-// server/shared suites under real Node against a disposable PostgreSQL, serialized
-// (singleThread) because every suite shares one database via truncateAll().
 export default defineConfig({
   test: {
     coverage: {
@@ -13,14 +10,12 @@ export default defineConfig({
       thresholds: { lines: 60, functions: 60, branches: 50 },
       reporter: ['text'],
     },
-    // Root-level, not per-project: fileParallelism is one of the options Vitest
-    // resolves globally (see its own CLI-overrides list), so setting it only inside
-    // the `api` project's block is silently ignored. `singleThread` alone pins every
-    // file to one OS thread but still lets Vitest interleave files as concurrent async
-    // tasks on it; the `api` project's suites share one real Postgres database via
-    // truncateAll(), so two files' beforeEach/test bodies can race on the same rows
-    // unless files also run one at a time. `web`'s suites don't touch shared state, so
-    // serializing them too costs a little speed but nothing else.
+    // Must be set at root, not per-project — Vitest resolves fileParallelism globally,
+    // so setting it only inside the `api` project's block is silently ignored.
+    // `singleThread` alone still lets Vitest interleave files as concurrent async tasks
+    // on that one thread; the `api` project's suites share one real Postgres database
+    // via truncateAll(), so files must also run one at a time or their beforeEach/test
+    // bodies race on the same rows.
     fileParallelism: false,
     projects: [
       {

@@ -4,8 +4,8 @@ import { useCurrentUserSession } from './hooks/useCurrentUserSession';
 import { GamePage } from './pages/game-page/GamePage';
 import { LoginPage } from './pages/login-page/LoginPage';
 
-// No router: two pages with no distinct URLs (§8) — multiple players are simulated on
-// this one page, not multiple browser sessions, so there's nothing for a URL to address.
+// No router: multiple players are simulated on this one page, not multiple browser
+// sessions, so there's nothing for a URL to address.
 export default function App() {
   const { user, checkingSession, setUser } = useCurrentUserSession();
 

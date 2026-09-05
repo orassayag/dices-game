@@ -1,8 +1,5 @@
 import { z } from 'zod';
 
-// Single source of truth for every error this API can emit (plan_v6.md §1). Both the
-// server's error middleware and the frontend's error discriminator import this file
-// instead of hand-rolling their own copy of the status table.
 export const ErrorCodeSchema = z.enum([
   'INVALID_INPUT',
   'INVALID_CREDENTIALS',
@@ -23,7 +20,6 @@ export const ErrorCodeSchema = z.enum([
 
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
 
-// Every code maps to exactly one HTTP status — see plan_v6.md §1 for what each means.
 export const ERROR_CODE_STATUS: Record<ErrorCode, number> = {
   INVALID_INPUT: 400,
   INVALID_CREDENTIALS: 401,

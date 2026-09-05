@@ -12,21 +12,14 @@ export interface LeaderboardEntry {
 }
 
 interface LeaderboardProps {
-  // Every entry that has ever taken a seat this session — a fixed set of stable `id`s
-  // (never seat numbers alone), so a row is never dropped just because a different
-  // opponent (e.g. the AI) currently occupies that seat in the live game.
   entries: LeaderboardEntry[];
 }
 
-/** Fixed top-left win-count table. Ranks by win count (ties keep each entry's original
- * position, via `Array#sort`'s stability) and animates a row sliding to its new rank via a
- * `translateY` transition — rows stay mounted across a reorder instead of being remounted
- * in new DOM positions, which is what makes the position swap animate. Entries are never
- * removed once shown (see LeaderboardProps) — the caller controls the set that's passed. */
+// Rows stay mounted across a reorder (keyed by id, not position) and animate via
+// `translateY` instead of being remounted in new DOM positions — that's what makes the
+// rank swap animate rather than jump.
 export function Leaderboard({ entries }: LeaderboardProps) {
   const ranked: LeaderboardEntry[] = [...entries].sort((a, b) => b.wins - a.wins);
-  // A tied lead has no single leader to crown — showing the crown on one of several equal
-  // scores would misrepresent the standings.
   const topWins: number = ranked[0]?.wins ?? 0;
   const isTiedLead: boolean = ranked.filter((entry) => entry.wins === topWins).length > 1;
 

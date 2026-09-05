@@ -13,14 +13,11 @@ interface NewGameModalProps {
   onModeChange: (value: 'human' | 'ai') => void;
   onAiSeatChange: (value: 1 | 2) => void;
   onSubmit: () => void;
-  // `null` means the modal cannot be dismissed — the very first game (no in-progress
-  // game exists yet), where there's nothing to cancel back to.
+  // null means the modal cannot be dismissed — there is no in-progress game to cancel back to.
   onCancel: (() => void) | null;
   busy: boolean;
 }
 
-/** Replaces the old full-page "start a new game" screen: the same fields, shown as a
- * small modal over the current page instead of navigating away from it. */
 export function NewGameModal({
   targetScore,
   mode,
@@ -37,16 +34,12 @@ export function NewGameModal({
     onSubmit();
   }
 
-  // Blocks the keys that would let a number input carry a negative or non-numeric-looking
-  // value (typed minus/plus sign, scientific notation) — the goal score must stay positive.
   function blockNonPositiveKeys(event: KeyboardEvent<HTMLInputElement>): void {
     if (event.key === '-' || event.key === '+' || event.key === 'e' || event.key === 'E') {
       event.preventDefault();
     }
   }
 
-  // Guards against a pasted or autofilled negative value slipping past the keydown block
-  // above — ignore the change entirely rather than propagating a negative goal score.
   function handleTargetScoreChange(value: string): void {
     const parsed: number = Number(value);
     if (Number.isNaN(parsed) || parsed < 0) {

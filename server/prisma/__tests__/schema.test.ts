@@ -14,9 +14,8 @@ function pgErrorCode(error: unknown): string | undefined {
   return (error as Prisma.PrismaClientKnownRequestError).meta?.code as string | undefined;
 }
 
-// Inserts a Game row via raw SQL (not prisma.game.create) so tests can attempt values
-// Prisma's own generated types would refuse to construct — e.g. an out-of-range enum
-// or a negative score — proving the DATABASE itself rejects them, not just the client.
+// Raw SQL, not prisma.game.create, so tests can attempt values Prisma's own generated
+// types would refuse to construct — proving the DATABASE itself rejects them.
 async function insertGameRaw(overrides: Record<string, string> = {}): Promise<void> {
   const columns: Record<string, string> = {
     id: `'${crypto.randomUUID()}'`,

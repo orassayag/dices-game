@@ -10,8 +10,6 @@ import { errorHandler } from '../errorHandler.js';
 import { requireAuth } from '../auth.js';
 import { truncateAll } from '../../__tests__/helpers/testDb.js';
 
-// A minimal app exercising requireAuth in isolation — no protected route exists yet
-// (game routes land at M3, stage 5), so this stands in for the eventual mount point.
 function buildProtectedApp(): Express {
   const app = express();
   app.use(cookieParser());

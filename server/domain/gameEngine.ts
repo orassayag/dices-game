@@ -1,17 +1,11 @@
-// Pure game rules (plan_v6.md §4). Every function here takes state in and returns an
-// outcome out — no DB, no Express, no side effects. `roll`/`hold` take an injected
-// `DiceRoller` rather than calling Math.random() directly, so the rules are testable
-// without randomness and swappable for a deterministic sequence (§13).
-
 export type Seat = 1 | 2;
 
 export type DiceRoller = () => [number, number];
 
 const DIE_FACE_MIN: number = 1;
 const DIE_FACE_MAX: number = 6;
-const BUST_FACE_VALUE: number = 6; // both dice showing this value busts the round
+const BUST_FACE_VALUE: number = 6;
 
-/** Validates a raw DB/request integer is actually 1 or 2 rather than blindly casting it. */
 export function toSeat(value: number): Seat {
   if (value !== 1 && value !== 2) {
     throw new Error(`Expected a seat value of 1 or 2, got ${value}.`);
@@ -35,8 +29,6 @@ export interface RollOutcome {
   nextCurrentSeat: Seat;
 }
 
-// Two dice via the injected roller; 6 & 6 busts (round score lost, seat passes),
-// otherwise the round score accumulates and the seat stays (plan_v6.md §4).
 export function roll(state: RollState, diceRoller: DiceRoller): RollOutcome {
   const dice = diceRoller();
   const busted = dice[0] === BUST_FACE_VALUE && dice[1] === BUST_FACE_VALUE;
@@ -71,9 +63,8 @@ export interface HoldOutcome {
   won: boolean;
 }
 
-// Banks the round score into the acting seat's total and always clears the round score
-// (plan_v6.md §4). A won game keeps the winning seat as `currentSeat` — there is no next
-// turn to pass it to; the persistence layer separately marks the game finished.
+// A won game keeps the winning seat as `currentSeat` — there is no next turn to pass it
+// to; the persistence layer separately marks the game finished.
 export function hold(state: HoldState): HoldOutcome {
   const priorSeatTotal = state.currentSeat === 1 ? state.p1Score : state.p2Score;
   const seatTotal = priorSeatTotal + state.roundScore;
@@ -86,9 +77,8 @@ export function hold(state: HoldState): HoldOutcome {
   };
 }
 
-// Standard mulberry32 PRNG — small, fast, and deterministic for a given 32-bit seed.
-// Only used when DICE_SEED is set (§13); the constants below are the algorithm's own
-// fixed mixing constants, not project-specific configuration.
+// Standard mulberry32 PRNG — the constants below are the algorithm's own fixed mixing
+// constants, not project-specific configuration.
 function createSeededRandom(seed: number): () => number {
   let state = seed | 0;
   return function random(): number {
@@ -104,9 +94,6 @@ function rollOneDie(random: () => number): number {
   return Math.floor(random() * DIE_FACE_MAX) + DIE_FACE_MIN;
 }
 
-// Real dice (Math.random) unless a seed is supplied, in which case every call to the
-// returned roller advances the same deterministic sequence — reproducible smoke runs
-// and tests without depending on real randomness (§13).
 export function createDiceRoller(seed?: number): DiceRoller {
   const random = seed === undefined ? Math.random : createSeededRandom(seed);
   return () => [rollOneDie(random), rollOneDie(random)];

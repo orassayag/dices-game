@@ -7,10 +7,8 @@ export interface Logger {
   error(message: string, metadata?: LogMetadata): void;
 }
 
-// Minimal structured logger, mirroring server/lib/logger.ts's shape so both sides share
-// one scoped-logger pattern. The browser has no process.stdout/stderr, so console.* is
-// this logger's sink — call sites still go through createLogger(), never console.*
-// directly (error-handling-logging.md).
+// The browser has no process.stdout/stderr, so console.* is this logger's sink — call
+// sites still go through createLogger(), never console.* directly.
 function write(scope: string, level: LogLevel, message: string, metadata?: LogMetadata): void {
   const entry = { timestamp: new Date().toISOString(), level, scope, message, ...metadata };
   const line = JSON.stringify(entry);

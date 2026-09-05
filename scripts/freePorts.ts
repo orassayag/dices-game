@@ -1,25 +1,14 @@
-/**
- * Kills leftover *project* dev processes (`tsx`/`node`/`vite`) still listening on this
- * project's dev ports (server 3000, client 5173) so `pnpm run dev` doesn't fail with
- * "address already in use". A `tsx watch` or `vite` process from a previous session that
- * never stopped is the usual cause — see the README's Troubleshooting section.
- *
- * Deliberately does NOT kill anything it can't identify as this project's own dev
- * process — in particular never Docker's own process (`com.docker.backend` on macOS is
- * what actually publishes a container's port on the host; killing it takes down the
- * whole Docker Desktop VM, not just one container). If port 3000 is held by a
- * `dices-game-app-1` container, the fix is `docker compose down`, not killing a host PID.
- *
- * Usage: pnpm run free-ports
- */
+// Deliberately does NOT kill anything it can't identify as this project's own dev
+// process — in particular never Docker's own process (`com.docker.backend` on macOS
+// publishes a container's port on the host; killing it takes down the whole Docker
+// Desktop VM, not just one container). If a port is held by a container, the fix is
+// `docker compose down`, not killing a host PID.
 import { execSync } from 'node:child_process';
 
 const SERVER_PORT: number = 3000;
 const CLIENT_PORT: number = 5173;
 const PORTS_TO_FREE: readonly number[] = [SERVER_PORT, CLIENT_PORT];
 
-// Command names this project's own dev processes actually run under — see
-// package.json's "dev:server" (tsx) and "dev:client" (vite runs as a node child process).
 const KILLABLE_COMMAND_PATTERN: RegExp = /^(node|tsx)$/i;
 
 interface ListeningProcess {

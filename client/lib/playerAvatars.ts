@@ -8,8 +8,6 @@ export interface PlayerIdentities {
   seat2: PlayerIdentity;
 }
 
-// Display names only — the avatar photo is now picked independently as a random
-// pravatar.cc image index (§8), not paired to a specific name.
 const PLAYER_NAMES: string[] = [
   'James Carter',
   'Michael Turner',
@@ -43,8 +41,8 @@ const PRAVATAR_IMAGE_IDS: number[] = Array.from(
 
 const FALLBACK_AVATAR_BACKGROUND_COLOR: string = '#6b7280';
 
-// §4: the AI opponent always shows this fixed identity, never a random human one — the
-// CSP img-src allowlist (server/app.ts) must include this host or the browser blocks it.
+// This avatar's host must be in the CSP img-src allowlist (server/app.ts) or the
+// browser blocks it.
 export const AI_PLAYER_NAME: string = 'AI Dices BOT';
 export const AI_PLAYER_AVATAR_URL: string =
   'https://img.magnific.com/free-vector/chatbot-chat-message-vectorart_78370-4104.jpg';
@@ -64,14 +62,10 @@ function pickTwoDistinct<T>(items: T[]): [T, T] {
   return [first, second];
 }
 
-/** A real face photo at the given pravatar.cc index (see avatars.txt). `avatarImageId`
- * is that service's own photo index, not a local asset. */
 export function avatarUrl(avatarImageId: number): string {
   return `https://i.pravatar.cc/150?img=${avatarImageId}`;
 }
 
-/** Fallback shown if the network photo fails to load (offline, blocked host) — a
- * self-contained colored initial circle so the UI never shows a broken-image glyph. */
 export function fallbackAvatarUrl(name: string): string {
   const initial: string = (name.charAt(0) || '?').toUpperCase();
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
@@ -81,11 +75,6 @@ export function fallbackAvatarUrl(name: string): string {
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
-/** Resolves what a seat actually shows: the fixed AI bot identity while that seat is
- * played by the AI, otherwise the seat's own human identity. `identity` is never mutated
- * when a seat becomes/stops being AI (GamePage generates it once per session), so
- * switching a New Game's opponent back to "Human" shows the exact same player as before
- * with no separate "restore" step needed. */
 export function resolveSeatDisplay(identity: PlayerIdentity, isAiSeat: boolean): SeatDisplay {
   if (isAiSeat) {
     return { name: AI_PLAYER_NAME, avatarSrc: AI_PLAYER_AVATAR_URL };
@@ -93,10 +82,6 @@ export function resolveSeatDisplay(identity: PlayerIdentity, isAiSeat: boolean):
   return { name: identity.name, avatarSrc: avatarUrl(identity.avatarImageId) };
 }
 
-/** Random name + random avatar photo per seat, generated once per browser session (see
- * GamePage's `useState(() => generatePlayerIdentities())`) so identities stay fixed for
- * as long as the user is signed in — never reshuffled by editing the New Game modal or by
- * creating additional games. */
 export function generatePlayerIdentities(): PlayerIdentities {
   const [name1, name2] = pickTwoDistinct(PLAYER_NAMES);
   const [avatarImageId1, avatarImageId2] = pickTwoDistinct(PRAVATAR_IMAGE_IDS);

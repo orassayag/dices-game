@@ -12,11 +12,8 @@ interface ErrorBoundaryState {
   error: Error | null;
 }
 
-/**
- * React only recognizes error boundaries implemented as class components
- * (getDerivedStateFromError/componentDidCatch have no hook equivalent) — this is a
- * framework requirement, not a stylistic choice to write a class here.
- */
+// React only recognizes error boundaries implemented as class components —
+// getDerivedStateFromError/componentDidCatch have no hook equivalent.
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public state: ErrorBoundaryState = { error: null };
 

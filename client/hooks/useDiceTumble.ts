@@ -13,8 +13,6 @@ interface UseDiceTumbleOptions {
   rolling: boolean;
 }
 
-/** Cycles a die's displayed face while `rolling` is true, to look like a tumble — Dice
- * consumes this and only renders the settled/tumbling transform for the returned face. */
 export function useDiceTumble({ value, rolling }: UseDiceTumbleOptions): DiceValue {
   const [tumbleFace, setTumbleFace] = useState<DiceValue>(value ?? 1);
 

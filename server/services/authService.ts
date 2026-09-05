@@ -17,9 +17,8 @@ export interface AuthenticatedUser {
   authToken: string;
 }
 
-// Register a new user (plan_v6.md §5, §10). `usernameKey` is the normalized uniqueness
-// key; `username` keeps the caller's original display form. A collision on the unique
-// index is caught here rather than pre-checked, closing the check-then-insert race.
+// A collision on the unique index is caught here rather than pre-checked, closing the
+// check-then-insert race.
 export async function registerUser(username: string, password: string): Promise<AuthenticatedUser> {
   const usernameKey = normalizeUsernameKey(username);
   const passwordHash = await hashPassword(password);
@@ -41,10 +40,8 @@ export async function registerUser(username: string, password: string): Promise<
   }
 }
 
-// Constant-time login (I-nothing but explicitly called out in §1/§10): always runs
-// exactly one bcrypt compare, even when the username doesn't exist, against the fixed
-// DUMMY_BCRYPT_HASH — so present and absent usernames take comparable time and the
-// generic INVALID_CREDENTIALS response never leaks which case occurred.
+// Always runs exactly one bcrypt compare, even when the username doesn't exist, against
+// the fixed DUMMY_BCRYPT_HASH — so present and absent usernames take comparable time.
 export async function loginUser(username: string, password: string): Promise<AuthenticatedUser> {
   const usernameKey = normalizeUsernameKey(username);
   const user = await prisma.user.findUnique({ where: { usernameKey } });
@@ -64,11 +61,8 @@ export async function loginUser(username: string, password: string): Promise<Aut
   };
 }
 
-// Backs GET /auth/me (the "remember me after reload" fix): requireAuth already proved
-// the cookie's tokenVersion is current, but it never looked up the username — this is
-// the read that lets the client restore { id, username } from a still-valid session
-// cookie alone, without persisting anything itself. UNAUTHORIZED (not a 404) matches how
-// requireAuth treats a deleted account for a token that's technically still valid.
+// UNAUTHORIZED, not 404 — matches how requireAuth treats a deleted account for a token
+// that's technically still valid.
 export async function getAuthenticatedUser(
   userId: string,
 ): Promise<{ id: string; username: string }> {

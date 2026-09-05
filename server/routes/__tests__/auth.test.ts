@@ -13,8 +13,6 @@ import {
 
 const CREDENTIALS = { username: 'alice', password: 'correct horse battery staple' };
 
-// Every register/login request is CSRF-guarded (M1b, stage 4) — a fresh pre-auth token
-// must be fetched and attached before each one. See server/__tests__/helpers/csrf.ts.
 async function register(
   app: ReturnType<typeof createApp>,
   body: Record<string, unknown> = CREDENTIALS,
@@ -116,11 +114,6 @@ describe('POST /auth/logout', () => {
     await truncateAll();
   });
 
-  // Stage 4 (M1b) added requireAuth to logout so the CSRF check can bind the token to
-  // req.userId — logout is no longer reachable without a valid session. The success
-  // path (valid auth cookie + matching user-bound CSRF token clears both cookies) is
-  // covered in server/routes/__tests__/csrf.test.ts alongside the rest of the CSRF
-  // verification suite.
   it('should reject logout with no auth cookie', async () => {
     const app = createApp();
     const csrf = await fetchPreAuthCsrf(app);
@@ -151,9 +144,7 @@ describe('GET /auth/me', () => {
   });
 });
 
-// Rate-limit tests live in their own files (authRegisterRateLimit.test.ts,
-// authLoginRateLimit.test.ts) — the limiters are module-level singletons shared by
-// every createApp() call within one test FILE's module graph, so a test that
-// deliberately exhausts a quota must not share a file with tests that need requests
-// to keep succeeding. Vitest resets the module graph between test files by default,
-// giving each rate-limit file its own untouched counters.
+// Rate-limit tests live in their own files: the limiters are module-level singletons
+// shared by every createApp() call within one test FILE's module graph, so a test that
+// deliberately exhausts a quota must not share a file with tests that need requests to
+// keep succeeding.

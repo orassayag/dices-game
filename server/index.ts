@@ -4,12 +4,8 @@ import { createLogger } from './lib/logger.js';
 
 const logger = createLogger('server');
 
-// Top-level safety net (§"error-handling-logging" — never swallow an exception): catches
-// anything that never reaches server/middleware/errorHandler.ts because it happened
-// outside a request's try/catch (a bug in a timer/background task, a truly unhandled
-// rejection). Without this, such an error would print to native stderr and never reach
-// the logger. An uncaught exception leaves the process in an undefined state (Node's own
-// guidance), so this logs it, then exits — the container/process manager restarts it.
+// An uncaught exception leaves the process in an undefined state, so this logs it (rather
+// than letting it print to bare stderr) then exits — the process manager restarts it.
 process.on('uncaughtException', (error: Error) => {
   logger.error('Uncaught exception — exiting process', {
     error: { name: error.name, message: error.message, stack: error.stack },

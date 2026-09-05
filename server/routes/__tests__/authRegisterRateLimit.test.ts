@@ -1,9 +1,7 @@
 // @vitest-environment node
 // Deliberately its own file: the register rate limiter is a module-level singleton
-// shared by every createApp() call, and this test exhausts its entire quota — sharing
-// a file with any other test that needs /auth/register to keep succeeding would make
-// that test order-dependent. Vitest resets the module graph per test file by default,
-// so this file starts with an untouched counter.
+// shared by every createApp() call, and this test exhausts its entire quota — sharing a
+// file with a test that needs /auth/register to keep succeeding would make it order-dependent.
 import request from 'supertest';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../../app.js';

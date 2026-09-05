@@ -1,7 +1,5 @@
-// Validates and derives every environment-dependent setting the server needs (plan_v6.md
-// §1, §13). Imported once at startup (server/index.ts) so a misconfigured deployment fails
-// loudly before it ever accepts a request, instead of silently running with a weak secret
-// or an open CORS origin.
+// Imported once at startup so a misconfigured deployment fails loudly before it ever
+// accepts a request, instead of silently running with a weak secret or an open origin.
 
 const JWT_SECRET_MIN_BYTES: number = 32;
 const DEFAULT_DEV_FRONTEND_URL: string = 'http://localhost:5173';
@@ -67,9 +65,8 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   requireByteLength(jwtSecret, JWT_SECRET_MIN_BYTES, 'JWT_SECRET');
 
   const frontendUrlRaw: string | undefined = source.FRONTEND_URL;
-  // Escape hatch for the single-container `docker-compose up` demo, where the app is
-  // reached at http://localhost:3000 by design and there is no real public origin to
-  // pin to. Never set this in an actual deployment — only docker-compose.yml sets it.
+  // Escape hatch for the single-container docker-compose demo only — never set this in
+  // an actual deployment.
   const allowLocalFrontendUrl: boolean = source.ALLOW_LOCAL_FRONTEND_URL === 'true';
   if (
     isProduction &&
@@ -107,7 +104,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
     cookie: {
       secure: isProduction,
       authCookieName: 'token',
-      // __Host- requires Secure, so it's only usable in production (§1, §13, I3).
+      // __Host- requires Secure, so it's only usable in production.
       csrfCookieName: isProduction ? '__Host-csrfToken' : 'csrfToken',
     },
   };

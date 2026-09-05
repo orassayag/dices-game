@@ -98,7 +98,6 @@ describe('HeuristicProvider', () => {
     const provider = new HeuristicProvider(MID_RANDOM);
     const decision = await provider.decide(
       context({ seatTotal: 0, roundScore: 20, targetScore: 100 }),
-      AbortSignal.timeout(1000),
     );
     expect(decision).toEqual({ action: 'hold' });
   });
@@ -107,7 +106,6 @@ describe('HeuristicProvider', () => {
     const provider = new HeuristicProvider();
     const decision = await provider.decide(
       context({ seatTotal: 95, roundScore: 5, targetScore: 100 }),
-      AbortSignal.timeout(1000),
     );
     expect(decision).toEqual({ action: 'hold' });
   });

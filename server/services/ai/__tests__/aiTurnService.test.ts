@@ -61,7 +61,7 @@ describe('aiTurnGame', () => {
       const created = await createGame(ownerId, {
         targetScore: TARGET_SCORE,
         mode: 'ai',
-        aiSeat: 2, // currentSeat starts at 1 — the human seat
+        aiSeat: 2,
       });
 
       try {

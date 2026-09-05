@@ -1,7 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 
-// Disposable database for the `api` Vitest project (plan_v6.md §12) — same Postgres
-// instance as dev (docker-compose.yml), separate database so tests never touch dev data.
+// Same Postgres instance as dev, separate database so tests never touch dev data.
 export const TEST_DATABASE_URL: string =
   'postgresql://dices_game:dices_game@localhost:5432/dices_game_test';
 

@@ -13,9 +13,6 @@ interface LoginPageProps {
   onAuthenticated: (user: AuthenticatedUser) => void;
 }
 
-// Register is presented as "Sign In" and login as "Login" (§2) — the show-password
-// toggle only makes sense while typing a brand-new password to double-check it (§3), so
-// it's gated on the same mode switch rather than a separate flag.
 const MODE_TITLE: Record<AuthMode, string> = {
   login: 'Login',
   register: 'Sign In',

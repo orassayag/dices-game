@@ -12,8 +12,7 @@ function Bomb({ shouldThrow }: { shouldThrow: boolean }) {
 
 describe('ErrorBoundary', () => {
   beforeEach(() => {
-    // React logs the caught error to console.error by default — silence it so the
-    // expected-error test doesn't look like a failure in the run's output.
+    // Silences React's default console.error logging for the caught error.
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
@@ -51,8 +50,6 @@ describe('ErrorBoundary', () => {
 
     await user.click(screen.getByRole('button', { name: 'Try again' }));
 
-    // The retry re-renders the same still-throwing child, so the fallback reappears —
-    // this proves the retry path runs (resets boundary state) rather than dead-ending.
     expect(screen.getByRole('alert')).toHaveTextContent('Something went wrong.');
   });
 });

@@ -1,8 +1,3 @@
-// Game routes (plan_v6.md §5, §7, §10 — M3a happy path + M3b hardening). Every route
-// requires auth; every state-changing route is also CSRF-guarded, matching the auth
-// routes' wiring (server/routes/auth.ts). Routes parse/dispatch only — all rules live in
-// gameService.
-
 import type { NextFunction, Request, Response } from 'express';
 import { Router } from 'express';
 import { rateLimit } from 'express-rate-limit';
@@ -27,8 +22,8 @@ import { aiTurnGame } from '../services/ai/aiTurnService.js';
 
 export const gamesRouter: Router = Router();
 
-// Every route below requires a session; csrfProtection (added per-route) needs
-// req.userId to already be set for its user-bound HMAC check, so this must run first.
+// csrfProtection (added per-route below) needs req.userId already set for its
+// user-bound HMAC check, so requireAuth must run first.
 gamesRouter.use(requireAuth);
 
 type GameIdParams = { id: string };
@@ -39,10 +34,6 @@ function rejectWithRateLimitedError(_req: Request, _res: Response, next: NextFun
   next(new RateLimitedError('Too many requests. Please try again later.'));
 }
 
-// Gameplay rate limit (§10): 60/min per authenticated user (JWT sub), on roll/hold/
-// ai-turn — caps a tight loop against DB load (and, once ai-turn lands in stage 9/10, a
-// live LLM key). Exported so stage 9/10's ai-turn route reuses the same limiter instance
-// rather than defining a third one.
 const GAMEPLAY_RATE_LIMIT_WINDOW_MS: number = 60 * 1000;
 const GAMEPLAY_RATE_LIMIT_MAX_REQUESTS: number = 60;
 
@@ -121,9 +112,6 @@ gamesRouter.post(
   },
 );
 
-// The only path to the AI seat (§3) — assertAiTurnGuard inside aiTurnGame rejects
-// anything else. Heuristic-only in production (no provider argument passed here, M5b
-// per stage 9's decision); shares the same gameplay rate limiter as roll/hold (§10).
 gamesRouter.post(
   '/:id/ai-turn',
   gameplayRateLimiter,

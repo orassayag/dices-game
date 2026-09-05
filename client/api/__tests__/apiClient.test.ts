@@ -65,9 +65,8 @@ describe('apiRequest', () => {
   });
 
   it('should attach the X-CSRF-Token header from the production __Host-csrfToken cookie', async () => {
-    // jsdom enforces the real __Host- prefix rules (Secure + https origin), which a
-    // plain document.cookie assignment can't satisfy in this test's http origin — stub
-    // the getter directly to test our own parsing logic, not jsdom's cookie jar.
+    // jsdom enforces the real __Host- prefix rules (Secure + https origin), which this
+    // test's http origin can't satisfy via a plain document.cookie assignment.
     vi.spyOn(document, 'cookie', 'get').mockReturnValue('__Host-csrfToken=prodtoken');
     vi.mocked(fetch).mockResolvedValueOnce(mockFetchResponse(200, { ok: true }));
 

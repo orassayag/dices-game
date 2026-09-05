@@ -16,9 +16,8 @@ interface AuthenticatedUser {
 
 const USERNAME_MIN_LENGTH: number = 3;
 export const PASSWORD_MIN_LENGTH: number = 8;
-// Style requirement (§5): a new password must mix letters and digits, not just meet a
-// length floor — checked only on Sign In (registration); an existing account's password
-// was never required to match this, so re-checking it on Login could lock someone out.
+// Checked only on registration — an existing account's password was never required to
+// match this, so re-checking it on login could lock someone out.
 const PASSWORD_STYLE_REGEX: RegExp = /^(?=.*[A-Za-z])(?=.*\d)/;
 
 function friendlyErrorMessage(error: unknown): string {
@@ -56,8 +55,6 @@ interface UseAuthFormResult {
   handleSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>;
 }
 
-/** Owns the login/register form's field state, validation, CSRF bootstrapping, and
- * submit handling — LoginPage consumes this and only renders. */
 export function useAuthForm({ onAuthenticated }: UseAuthFormOptions): UseAuthFormResult {
   const [mode, setMode] = useState<AuthMode>('login');
   const [username, setUsername] = useState<string>('');
@@ -67,9 +64,8 @@ export function useAuthForm({ onAuthenticated }: UseAuthFormOptions): UseAuthFor
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  // Bumped whenever validateFields sets that field's error, so the input below can be
-  // remounted (via key) to replay the shake animation on every failed attempt — a class
-  // toggle alone wouldn't replay it while the error stays set across repeat submits.
+  // Bumped on each validation failure so the input can be remounted (via key) to replay
+  // the shake animation even when the error stays set across repeat submits.
   const [usernameShakeKey, setUsernameShakeKey] = useState<number>(0);
   const [passwordShakeKey, setPasswordShakeKey] = useState<number>(0);
 
@@ -79,9 +75,6 @@ export function useAuthForm({ onAuthenticated }: UseAuthFormOptions): UseAuthFor
       .catch(() => setErrorMessage('Could not reach the server. Please refresh and try again.'));
   }, []);
 
-  // Runs in place of the browser's native constraint validation (the form carries
-  // `noValidate`) so failures render as an inline message next to the field itself, not a
-  // floating browser tooltip.
   function validateFields(): boolean {
     const errors: FieldErrors = {};
     if (username.trim().length === 0) {
@@ -92,9 +85,6 @@ export function useAuthForm({ onAuthenticated }: UseAuthFormOptions): UseAuthFor
     if (password.length === 0) {
       errors.password = 'Password is required.';
     } else if (mode === 'register' && password.length < PASSWORD_MIN_LENGTH) {
-      // Length is only enforced on Sign In (registration) — Login authenticates an
-      // existing account, whose actual password may not fit this floor, and the server
-      // is the source of truth for whether it's correct either way.
       errors.password = `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`;
     } else if (mode === 'register' && !PASSWORD_STYLE_REGEX.test(password)) {
       errors.password = 'Password must contain at least one letter and one number.';

@@ -12,9 +12,8 @@ import { csrfProtection } from '../middleware/csrf.js';
 import { validateBody } from '../middleware/validate.js';
 import { getAuthenticatedUser, loginUser, registerUser } from '../services/authService.js';
 
-// Auth rate limits (plan_v6.md §10). `app.set('trust proxy', false)` (server/app.ts)
-// makes `req.ip` the real socket address, so neither limiter can be bypassed by a forged
-// `X-Forwarded-For` header.
+// `app.set('trust proxy', false)` (server/app.ts) makes `req.ip` the real socket
+// address, so neither limiter below can be bypassed by a forged X-Forwarded-For header.
 const REGISTER_WINDOW_MS: number = 60 * 60 * 1000;
 const REGISTER_MAX_REQUESTS: number = 10;
 const LOGIN_WINDOW_MS: number = 60 * 1000;
@@ -32,8 +31,8 @@ const registerRateLimiter = rateLimit({
   handler: rejectWithRateLimitedError,
 });
 
-// Keyed on ip + normalized username (not username alone) — a per-username-only lockout
-// would let an attacker lock a victim out by repeatedly failing their login.
+// Keyed on ip + username, not username alone — a username-only lockout would let an
+// attacker lock a victim out by repeatedly failing their login.
 const loginRateLimiter = rateLimit({
   windowMs: LOGIN_WINDOW_MS,
   limit: LOGIN_MAX_REQUESTS,
@@ -47,9 +46,6 @@ const loginRateLimiter = rateLimit({
   handler: rejectWithRateLimitedError,
 });
 
-// The pre-auth CSRF token only needs to survive the login/register round trip, not a
-// full session — a short lifetime limits the window a leaked/unused pre-auth cookie
-// stays valid.
 const PRE_AUTH_CSRF_COOKIE_MAX_AGE_MS: number = 10 * 60 * 1000;
 
 function authCookieOptions(): {
@@ -68,10 +64,8 @@ function setAuthCookie(res: Response, authToken: string): void {
   });
 }
 
-// The CSRF cookie must stay readable by JS (it's echoed into the X-CSRF-Token header),
-// so — unlike the auth cookie — it is NOT httpOnly. `secure`/`sameSite`/`path` still
-// match the auth cookie; `env.cookie.csrfCookieName` already carries the `__Host-`
-// prefix in production (server/config/env.ts).
+// Unlike the auth cookie, this one is NOT httpOnly — it must stay readable by JS, which
+// echoes it into the X-CSRF-Token header.
 function csrfCookieOptions(): { httpOnly: false; secure: boolean; sameSite: 'lax'; path: string } {
   return { httpOnly: false, secure: env.cookie.secure, sameSite: 'lax', path: '/' };
 }
@@ -84,19 +78,14 @@ type AuthRequest = Request<Record<string, never>, unknown, AuthCredentialsInput>
 
 export const authRouter: Router = Router();
 
-// Pre-auth CSRF token (I9) — the client fetches this before submitting login/register,
-// so a purely cross-site auto-submit (no prior same-origin fetch to read the token) can
-// never supply a valid X-CSRF-Token. GET is exempt from csrfProtection's own checks, so
-// this route needs no guard itself.
+// The client fetches this before submitting login/register, so a purely cross-site
+// auto-submit (no prior same-origin fetch to read the token) can never supply a valid
+// X-CSRF-Token.
 authRouter.get('/csrf', (_req: Request, res: Response): void => {
   setCsrfCookie(res, generatePreAuthCsrfToken(), PRE_AUTH_CSRF_COOKIE_MAX_AGE_MS);
   res.status(204).end();
 });
 
-// Restores the session on page reload (bug report: a refresh logged the user back out)
-// — the client calls this once on mount instead of assuming "no local state" means "no
-// session". GET is exempt from csrfProtection, so this needs only requireAuth: a valid,
-// unrevoked auth cookie alone is enough to read the session back.
 authRouter.get(
   '/me',
   requireAuth,
@@ -111,11 +100,6 @@ authRouter.get(
   },
 );
 
-// validateBody replaces req.body with the parsed AuthCredentialsInput before this
-// handler runs, so the { username, password } destructure below is sound even though
-// Express's own typing can't see across the middleware chain. csrfProtection runs
-// before requireAuth would ever apply here (there is no session yet), so it verifies
-// the pre-auth token (req.userId is unset) rather than a user-bound one.
 authRouter.post(
   '/register',
   registerRateLimiter,
@@ -126,8 +110,6 @@ authRouter.post(
       const { username, password } = req.body;
       const user = await registerUser(username, password);
       setAuthCookie(res, user.authToken);
-      // Rotation (§1): the pre-auth token is replaced by a user-bound one now that a
-      // session exists, matching the auth cookie's own lifetime.
       setCsrfCookie(res, generateUserBoundCsrfToken(user.id), AUTH_TOKEN_LIFETIME_SECONDS * 1000);
       const body: AuthResponse = { user: { id: user.id, username: user.username } };
       res.status(201).json(body);
@@ -156,9 +138,8 @@ authRouter.post(
   },
 );
 
-// requireAuth must run BEFORE csrfProtection here: the CSRF check needs `req.userId` to
-// recompute the expected HMAC against the actual authenticated subject (not merely
-// confirm header === cookie) — see server/middleware/csrf.ts.
+// requireAuth must run before csrfProtection: the CSRF check needs req.userId to
+// recompute the expected HMAC against the authenticated subject.
 authRouter.post('/logout', requireAuth, csrfProtection, (_req: Request, res: Response): void => {
   res.clearCookie(env.cookie.authCookieName, authCookieOptions());
   res.clearCookie(env.cookie.csrfCookieName, csrfCookieOptions());

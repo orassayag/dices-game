@@ -6,10 +6,6 @@ interface ConfettiProps {
   active: boolean;
 }
 
-/** Confetti shown continuously while `active` is true (a win) and cleared the moment it
- * flips back to false (the player starts a new game). Renders as a viewport-fixed
- * overlay so it displays over the game panel regardless of where this component sits in
- * the tree. */
 export function Confetti({ active }: ConfettiProps) {
   const pieces = useConfettiPieces(active);
 

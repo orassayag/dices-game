@@ -46,7 +46,6 @@ describe('GamePage', () => {
     render(<GamePage user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
 
     expect(await screen.findByRole('heading', { name: 'New Game' })).toBeInTheDocument();
-    // Cancel is offered so the player can still return to the fetched in-progress game.
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Roll' })).toBeInTheDocument();
   });
@@ -74,15 +73,12 @@ describe('GamePage', () => {
     ]);
     const user = userEvent.setup();
     render(<GamePage user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
-    // Dismiss the login-time modal to resume the fetched game first.
     await user.click(await screen.findByRole('button', { name: 'Cancel' }));
     expect(screen.queryByRole('heading', { name: 'New Game' })).not.toBeInTheDocument();
     expect(screen.getByText('33')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'New Game' }));
 
-    // Opening New Game must never look like a reset: the real scores stay on screen
-    // (dimmed behind the modal overlay) — only submitting "Let's Go!" may change them.
     expect(await screen.findByRole('heading', { name: 'New Game' })).toBeInTheDocument();
     expect(screen.getByText('33')).toBeInTheDocument();
     expect(screen.getByText('37')).toBeInTheDocument();
@@ -231,10 +227,8 @@ describe('GamePage', () => {
       });
       const user = userEvent.setup();
       render(<GamePage user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
-      // The login-time modal pauses the loop until dismissed (see the pause test below).
       await user.click(await screen.findByRole('button', { name: 'Cancel' }));
 
-      // Waits past AI_TURN_THINK_DELAY_MS (GamePage's deliberate "AI is thinking" pause).
       await waitFor(() => expect(aiTurnSpy).toHaveBeenCalledWith('g1', 5), { timeout: 2000 });
     });
 
@@ -292,17 +286,14 @@ describe('GamePage', () => {
       const aiTurnSpy = vi.spyOn(gamesApi, 'aiTurnGame').mockReturnValueOnce(firstAiTurnPromise);
       const user = userEvent.setup();
       render(<GamePage user={USER} onSessionExpired={vi.fn()} onLogout={vi.fn()} />);
-      // Dismiss the login-time modal so the AI auto-turn loop can start at all.
       await user.click(await screen.findByRole('button', { name: 'Cancel' }));
       await waitFor(() => expect(aiTurnSpy).toHaveBeenCalledTimes(1), { timeout: 2000 });
 
-      // Reopen New Game while the ai-turn call above is still in flight.
       await user.click(screen.getByRole('button', { name: 'New Game' }));
       await screen.findByRole('heading', { name: 'New Game' });
 
-      // Resolve it with the AI seat still to move — without the modal-open gate this would
-      // immediately re-trigger a second automatic aiTurnGame call (bug report: selecting
-      // AI got "stuck" showing the previous game because of exactly this race).
+      // Resolves with the AI seat still to move — without the modal-open gate this would
+      // immediately re-trigger a second automatic aiTurnGame call.
       resolveFirstAiTurn({
         state: freshGame({ id: 'old-game', mode: 'ai', aiSeat: 1, currentSeat: 1, version: 6 }),
         versionConflictRecovered: false,

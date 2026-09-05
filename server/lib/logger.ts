@@ -13,10 +13,9 @@ export interface Logger {
 
 const LOG_FILE_PATH: string = path.join(process.cwd(), 'logs', 'server.log');
 
-// Console gets colorized, human-scannable lines in dev; production keeps pino's
-// default single-line JSON so log aggregators can parse it. The file destination is
-// always raw JSON, regardless of environment, since it's read by tooling, not eyes.
-// `mkdir: true` creates the (gitignored) logs/ directory on first write.
+// Console gets colorized, human-scannable lines in dev; production keeps pino's default
+// single-line JSON so log aggregators can parse it. The file destination is always raw
+// JSON regardless of environment, since it's read by tooling, not eyes.
 const consoleStream = env.isProduction
   ? { stream: process.stdout }
   : { stream: pinoPretty({ colorize: true, translateTime: 'SYS:standard', ignore: 'pid,hostname' }) };

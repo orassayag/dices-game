@@ -1,14 +1,10 @@
-// Builds the AI adapter's data boundary from a Game row (plan_v6.md §9) — exactly the
-// six AiDecisionContext fields, nothing else. This is the one place a Game row is
-// narrowed down to what a model is allowed to see; no token, username, raw row, or
-// error detail ever crosses it.
+// The one place a Game row is narrowed down to exactly the AiDecisionContext fields a
+// model is allowed to see — no token, username, raw row, or error detail crosses it.
 
 import type { Game } from '@prisma/client';
 import type { Seat } from '../../domain/gameEngine.js';
 import { LEGAL_AI_ACTIONS, type AiDecisionContext, type Die } from './aiTypes.js';
 
-/** Validates a raw DB integer is actually a die face rather than blindly casting it —
- *  mirrors gameEngine.ts's `toSeat`. */
 function toDie(value: number): Die {
   if (value < 1 || value > 6) {
     throw new Error(`Expected a die face 1-6, got ${value}.`);

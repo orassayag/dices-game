@@ -1,7 +1,6 @@
 // @vitest-environment node
-// Own file for the same reason as authRegisterRateLimit.test.ts: the login rate
-// limiter is a module-level singleton, and these tests deliberately exhaust one of its
-// per-(ip, username) buckets.
+// Own file: the login rate limiter is a module-level singleton, and these tests
+// deliberately exhaust one of its per-(ip, username) buckets.
 import request from 'supertest';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../../app.js';

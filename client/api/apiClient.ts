@@ -1,13 +1,10 @@
 import { ErrorEnvelopeSchema, type ErrorCode } from '../../shared/index';
 
-// Dev serves client (Vite, :5173) and server (:3000) on different ports; the server's
-// credentialed CORS (server/app.ts) is pinned to exactly this origin, so cross-origin
-// fetch — not a Vite proxy — is the transport. In production the server serves the built
-// client itself, so requests are same-origin and this base is unused.
+// Dev serves client (Vite, :5173) and server (:3000) on different ports, so requests
+// cross-origin via CORS; in production the server serves the built client and this base
+// is unused (same-origin).
 const DEV_API_BASE_URL: string = 'http://localhost:3000';
 const DEV_CLIENT_PORT: string = '5173';
-// Detected via window.location rather than import.meta.env.DEV so the client needs no
-// vite/client ambient-types file just to read one flag.
 const API_BASE_URL: string = window.location.port === DEV_CLIENT_PORT ? DEV_API_BASE_URL : '';
 
 const STATE_CHANGING_METHODS: ReadonlySet<string> = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -17,7 +14,6 @@ const NO_CONTENT_STATUS: number = 204;
 const SERVICE_UNAVAILABLE_MAX_RETRIES: number = 2;
 const SERVICE_UNAVAILABLE_RETRY_DELAY_MS: number = 500;
 
-/** Thrown for every non-2xx API response. `errorCode` mirrors the server's own field name. */
 export class ApiError extends Error {
   public readonly errorCode: ErrorCode;
   public readonly status: number;
@@ -34,11 +30,8 @@ function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-/**
- * Reads the CSRF cookie's value regardless of environment — the server names it
- * `csrfToken` in dev and `__Host-csrfToken` in production (server/config/env.ts) — so the
- * client never needs to know which environment it's running in to find it.
- */
+// Checks both names: the server calls this cookie `csrfToken` in dev and
+// `__Host-csrfToken` in production.
 function readCsrfCookie(): string | undefined {
   const match = document.cookie
     .split('; ')
@@ -67,14 +60,8 @@ interface RequestOptions {
   body?: unknown;
 }
 
-/**
- * The single fetch boundary every API call goes through: attaches credentials + the
- * CSRF header, discriminates the error envelope into a typed `ApiError`, and retries a
- * transient `503 SERVICE_UNAVAILABLE` (I8) a bounded number of times before giving up —
- * so a brief DB blip surfaces as one retried request, not an immediate logout-shaped error.
- * Returns `unknown` deliberately — every caller validates the body against the real
- * shared Zod schema for that endpoint rather than trusting an asserted type.
- */
+// Returns `unknown` deliberately — every caller validates the body against the real
+// shared Zod schema for that endpoint rather than trusting an asserted type.
 export async function apiRequest(path: string, options: RequestOptions = {}): Promise<unknown> {
   const method = options.method ?? 'GET';
   const headers: Record<string, string> = {};

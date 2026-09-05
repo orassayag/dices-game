@@ -44,16 +44,10 @@ async function aiTurnGameOnce(id: string, expectedVersion: number): Promise<Game
 
 export interface GameActionResult {
   state: GameStateDto;
-  /** True when a stale `expectedVersion` was recovered by refetching (§8) — the caller
-   * should show a "the game moved on" message rather than treating this as a normal move. */
+  // True when a stale expectedVersion was recovered by refetching, rather than a normal move.
   versionConflictRecovered: boolean;
 }
 
-/**
- * Runs a roll/hold action and, on a `409 VERSION_CONFLICT`, recovers centrally by
- * refetching the game instead of surfacing the error — this is what breaks the
- * stale-version retry loop described in plan_v6.md §8.
- */
 async function performGameAction(
   id: string,
   action: () => Promise<GameStateDto>,
@@ -78,9 +72,6 @@ export async function holdGame(id: string, expectedVersion: number): Promise<Gam
   return await performGameAction(id, () => holdGameOnce(id, expectedVersion));
 }
 
-/** Drives the AI seat one move forward (§9). The caller (GamePage) re-calls this
- * while `state.mode === 'ai' && state.currentSeat === state.aiSeat` — the same
- * version-conflict recovery as roll/hold applies here too. */
 export async function aiTurnGame(id: string, expectedVersion: number): Promise<GameActionResult> {
   return await performGameAction(id, () => aiTurnGameOnce(id, expectedVersion));
 }

@@ -7,15 +7,12 @@ import { createLogger } from '../lib/logger.js';
 const logger = createLogger('error-handler');
 
 // 5xx means the API itself failed (a bug, a dependency outage) — ERROR level. Anything
-// below that is an expected rejection (bad input, auth, conflict, rate limit): still
-// worth an audit trail, but not an incident, so it's logged at WARN
-// (error-handling-logging.md's log-level guidance).
+// below that is an expected rejection, logged at WARN.
 const SERVER_ERROR_STATUS_THRESHOLD: number = 500;
 
-// A malformed-JSON body: express.json() rejects it before any route runs, throwing a
-// SyntaxError tagged with `type: 'entity.parse.failed'` and a `body` property (I5).
-// Caught here, before the generic err.status fallback, so broken JSON produces a
-// union error code instead of an out-of-union body-parser response.
+// express.json() rejects a malformed-JSON body before any route runs, throwing a
+// SyntaxError tagged with `type: 'entity.parse.failed'` — an undocumented shape, not a
+// public error class.
 function isBodyParserSyntaxError(err: unknown): err is SyntaxError & { status?: number } {
   return err instanceof SyntaxError && (err as { type?: string }).type === 'entity.parse.failed';
 }
@@ -27,11 +24,6 @@ function serializeError(err: unknown): unknown {
   return err;
 }
 
-// Single funnel point for every error the API can produce — every route/middleware
-// forwards its catch here via `next(err)` (server/routes, server/middleware/*), so
-// logging lives once, in this one place, instead of at each individual throw site. That
-// means a new error path added later is logged automatically just by reaching here,
-// rather than needing its own log call remembered at the call site.
 function logAndSendError(
   req: Request,
   res: Response,

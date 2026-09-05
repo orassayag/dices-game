@@ -1,10 +1,7 @@
-// Orchestrates one AI decision end-to-end (plan_v6.md §9): bound the wait with an
-// application-level deadline, validate whatever the provider returns, and fall back to
-// the deterministic heuristic on ANY failure — timeout, rejection, or a malformed reply
-// are all treated identically. `Promise.race` only bounds how long this function WAITS;
-// it never cancels the underlying provider call, which is exactly why cleanup tied to
-// concurrency state (single-flight claim, provider semaphore — see aiTurnConcurrency.ts)
-// must hook the raw provider promise via `onProviderSettled`, not this function's return.
+// `Promise.race` below only bounds how long this function WAITS — it never cancels the
+// underlying provider call. Concurrency cleanup (single-flight claim, provider semaphore)
+// must therefore hook the raw provider promise via `onProviderSettled`, not this
+// function's return.
 
 import { createLogger, type Logger } from '../../lib/logger.js';
 import { decideHeuristically } from './heuristicProvider.js';
@@ -26,19 +23,13 @@ function rejectAfter(ms: number): Promise<never> {
 }
 
 export interface ResolveAiDecisionParams {
-  /** `null` means no live provider is configured — this project's current, deliberate
-   *  heuristic-only setup (plan_v6.md's Open Questions). The heuristic then runs
-   *  directly with no network attempt, so no API key is ever required to play. */
+  // null runs the heuristic directly with no network attempt.
   provider: AiDecisionProvider | null;
   context: AiDecisionContext;
-  /** Included only for log correlation — never passed into `context` (the adapter's data
-   *  boundary excludes it). */
   gameId: string;
   logger?: Logger;
-  /** Invoked exactly once, when the underlying provider call SETTLES — not when the
-   *  deadline race ends. The hook point for releasing single-flight/semaphore state tied
-   *  to real completion (I2). Never called when `provider` is null (the heuristic runs
-   *  synchronously — there is nothing to settle). */
+  // Fires once the underlying provider call SETTLES, not when the deadline race ends.
+  // Never called when `provider` is null.
   onProviderSettled?: () => void;
 }
 

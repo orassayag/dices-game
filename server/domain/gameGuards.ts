@@ -1,12 +1,6 @@
-// Authorization guards (plan_v6.md §3). Pure assertion functions over an already-fetched
-// row — the caller does the DB read; these only decide whether the caller may act on it.
-
 import type { Game } from '@prisma/client';
 import { ConflictError, ForbiddenError, NotFoundError } from '../lib/errors.js';
 
-// Caller's JWT sub === game.ownerUserId, otherwise FORBIDDEN, or NOT_FOUND when the game
-// doesn't exist. Applies regardless of `status` — an abandoned/finished game the caller
-// owns still passes; only a nonexistent or non-owned id fails.
 export function assertReadGuard(game: Game | null, userId: string): asserts game is Game {
   if (!game) {
     throw new NotFoundError('Game not found.', { errorCode: 'GAME_NOT_FOUND' });
@@ -16,9 +10,8 @@ export function assertReadGuard(game: Game | null, userId: string): asserts game
   }
 }
 
-// Read guard AND the current seat must be human. `ai-turn` is the only path to the AI
-// seat (§3) — actorSeat always comes from the locked row's currentSeat, never the
-// request body, so this is the only seat check roll/hold ever need.
+// actorSeat always comes from the locked row's currentSeat, never the request body, so
+// this is the only seat check roll/hold ever need.
 export function assertActionGuard(game: Game | null, userId: string): asserts game is Game {
   assertReadGuard(game, userId);
   if (game.mode === 'ai' && game.currentSeat === game.aiSeat) {
@@ -28,15 +21,8 @@ export function assertActionGuard(game: Game | null, userId: string): asserts ga
   }
 }
 
-// Read guard AND the *inverse* seat check: mode must be 'ai' and the current seat must
-// be the AI's. Deliberately its own explicit check rather than derived from
-// assertActionGuard — mixing the two would silently invert on a maintenance edit, so a
-// later reader doesn't "fix" this back to the action guard's shape (§3).
-//
-// Reuses AI_TURN_REQUIRED rather than a new error code: server/lib/errors.ts already
-// documents ConflictError as shared by this whole guard family ("the caller picks the
-// code"), and both failures are the same class of mistake — acting through the wrong
-// seat channel — just from opposite directions.
+// Deliberately its own explicit check rather than derived from assertActionGuard by
+// negation — mixing the two would silently invert on a maintenance edit.
 export function assertAiTurnGuard(game: Game | null, userId: string): asserts game is Game {
   assertReadGuard(game, userId);
   if (game.mode !== 'ai' || game.currentSeat !== game.aiSeat) {

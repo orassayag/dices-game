@@ -7,8 +7,8 @@ const CSRF_HEADER_NAME: string = 'x-csrf-token';
 const SAFE_METHOD: string = 'GET';
 
 // `req.get('origin')` is absent on some same-origin browser requests; `Referer` is the
-// documented fallback (plan_v6.md §1, §10). A malformed Referer (not a parseable URL)
-// is treated as absent rather than throwing.
+// fallback. A malformed Referer (not a parseable URL) is treated as absent rather than
+// throwing.
 function resolveRequestOrigin(req: Request): string | undefined {
   const originHeader: string | undefined = req.get('origin');
   if (originHeader) {
@@ -25,11 +25,9 @@ function resolveRequestOrigin(req: Request): string | undefined {
   }
 }
 
-// Hardened CSRF guard (plan_v6.md §1, §10, I3/I9). Mount on every state-changing route,
-// including pre-auth ones (`/auth/login`, `/auth/register`) — those verify the token
-// against the fixed pre-auth subject; every other route verifies it against `req.userId`,
-// which `requireAuth` must therefore run and set BEFORE this middleware on that route.
-// Any failure is `403 CSRF_INVALID` (§11) — never a partial pass.
+// Mount on every state-changing route, including pre-auth ones — those verify the token
+// against the fixed pre-auth subject; every other route verifies it against req.userId,
+// which requireAuth must therefore run and set BEFORE this middleware on that route.
 export function csrfProtection(req: Request, _res: Response, next: NextFunction): void {
   if (req.method === SAFE_METHOD) {
     next();

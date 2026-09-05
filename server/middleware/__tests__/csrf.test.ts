@@ -10,10 +10,9 @@ import { csrfProtection } from '../csrf.js';
 const FRONTEND_ORIGIN: string = 'http://localhost:5173';
 const CSRF_HEADER_NAME: string = 'X-CSRF-Token';
 
-// A minimal app exercising csrfProtection in isolation. `withAuthenticatedUserId`
-// simulates requireAuth having already run and set req.userId — the real ordering
-// requirement is enforced by mounting requireAuth before csrfProtection in
-// server/routes/auth.ts, not by this middleware itself.
+// `withAuthenticatedUserId` simulates requireAuth having already run and set req.userId
+// — the real ordering requirement is enforced by mounting order in the actual routers,
+// not by this middleware itself.
 function buildApp(withAuthenticatedUserId?: string): Express {
   const app = express();
   app.use(cookieParser());

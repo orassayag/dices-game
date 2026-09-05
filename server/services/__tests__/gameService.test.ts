@@ -132,7 +132,6 @@ describe('gameService', () => {
       expect(held.roundScore).toBe(0);
       expect(held.currentSeat).toBe(2);
       expect(held.status).toBe('in_progress');
-      // The last roll stays visible through a hold (§5) — lastDice is retained.
       expect(held.lastDice).toEqual([3, 4]);
     });
 

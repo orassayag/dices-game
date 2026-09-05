@@ -1,7 +1,6 @@
 // @vitest-environment node
-// Own file (not folded into games.test.ts) so its registrations don't push that file's
-// HTTP register calls over the auth register rate limiter's 10/hr-per-IP ceiling — see
-// authRegisterRateLimit.test.ts's comment: each test file gets its own untouched
+// Own file so its registrations don't push games.test.ts's register calls over the
+// auth register rate limiter's ceiling — each test file gets its own untouched
 // module-level counter.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../../app.js';

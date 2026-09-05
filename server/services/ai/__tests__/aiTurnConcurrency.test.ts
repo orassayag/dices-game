@@ -68,10 +68,10 @@ describe('AiProviderSemaphore', () => {
   });
 });
 
-// Reproduces the exact production wiring from plan_v6.md §9: a claim is taken before the
-// provider call starts, and both the claim and the semaphore slot release only when the
-// provider promise truly settles — proving a hung call can never let a second request for
-// the same move acquire the claim and start a second paid call (I2).
+// Proves a hung call can never let a second request for the same move acquire the claim
+// and start a second provider call: the claim is taken before the provider call starts,
+// and both the claim and the semaphore slot release only when the provider promise
+// truly settles.
 describe('single-flight + semaphore composed with resolveAiDecision (I2)', () => {
   beforeEach(() => {
     vi.useFakeTimers();

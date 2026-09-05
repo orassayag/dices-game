@@ -22,9 +22,8 @@ async function ensureTestDatabaseExists(): Promise<void> {
   }
 }
 
-// Runs once before the `api` Vitest project's suites (plan_v6.md §12): creates the
-// disposable test database if it doesn't exist yet, then applies every migration —
-// including the raw-SQL DB invariants — the same way a real deploy would.
+// Creates the disposable test database if it doesn't exist yet, then applies every
+// migration — including the raw-SQL DB invariants — the same way a real deploy would.
 export async function setup(): Promise<void> {
   await ensureTestDatabaseExists();
   execSync('pnpm exec prisma migrate deploy', {

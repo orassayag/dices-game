@@ -10,9 +10,6 @@ import {
   withCsrfHeaders,
 } from './csrf.js';
 
-// Shared by every route-level test suite that needs a real authenticated + CSRF-bound
-// session (game routes, gameplay rate limiting, …) — extracted once two suites needed
-// the identical register-then-build-a-session flow.
 export interface TestSession {
   userId: string;
   cookieHeader: string;

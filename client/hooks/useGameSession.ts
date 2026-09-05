@@ -18,18 +18,10 @@ import { playWinSound } from '../lib/sound';
 const logger = createLogger('game-screen');
 
 const DEFAULT_TARGET_SCORE: number = 100;
-const DEFAULT_AI_SEAT: 1 | 2 = 2; // the human plays seat 1 by default when starting an AI game
+const DEFAULT_AI_SEAT: 1 | 2 = 2;
 
-// Pause before each automated AI move so it reads as "thinking" rather than instant —
-// the loading icon above the AI's "Player N" title (PlayerCard) is shown for this whole
-// window, not just the network round-trip.
 const AI_TURN_THINK_DELAY_MS: number = 900;
 
-// Shown behind the New Game modal before any game exists (requirement: the very first
-// load should read as "already on the game screen, New Game already open" — not a bare
-// modal floating over an empty page). Never sent to the server; the modal's overlay
-// (z-50, full-viewport) sits on top and makes it visually inert, exactly like reopening
-// New Game mid-game.
 export const PLACEHOLDER_GAME: GameStateDto = {
   id: '__placeholder__',
   mode: 'human',
@@ -85,18 +77,11 @@ interface UseGameSessionResult {
   closeNewGameModal: () => void;
 }
 
-/** Owns the in-progress game's server state, the New Game form fields, and every action
- * that talks to the games API — GamePage consumes this and only renders. */
 export function useGameSession({ onSessionExpired, onLogout }: UseGameSessionOptions): UseGameSessionResult {
   const [game, setGame] = useState<GameStateDto | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [busy, setBusy] = useState<boolean>(false);
   const [showNewGameModal, setShowNewGameModal] = useState<boolean>(false);
-  // True once the player has opened New Game from the in-game button at least once (as
-  // opposed to the automatic modal shown on login). From that point on, opening New Game
-  // must show the real board behind the modal instead of a reset-looking placeholder —
-  // only submitting the modal ("Let's Go!") may actually change game state; Cancel/X must
-  // return to exactly what was on screen before the click.
   const [midGameReopen, setMidGameReopen] = useState<boolean>(false);
   const [targetScoreInput, setTargetScoreInput] = useState<number>(DEFAULT_TARGET_SCORE);
   const [modeInput, setModeInput] = useState<'human' | 'ai'>('human');
@@ -105,17 +90,9 @@ export function useGameSession({ onSessionExpired, onLogout }: UseGameSessionOpt
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [aiThinking, setAiThinking] = useState<boolean>(false);
   const [wins, setWins] = useState<WinCounts>({ seat1: 0, seat2: 0, ai: 0 });
-  // Set once any game this session has ever had mode 'ai' and never reset back to false —
-  // the AI's leaderboard row must never disappear again after it first appears (bug: it
-  // was previously not tracked at all, so switching back to a human-vs-human game silently
-  // dropped whichever seat the AI had been "borrowing" its win count from).
+  // Deliberately sticky: set to true once, never reset back to false.
   const [aiHasPlayed, setAiHasPlayed] = useState<boolean>(false);
-  // Guards the win-count/sound effect below against double-counting the same finished
-  // game across re-renders (e.g. an unrelated state update re-running the effect).
   const countedWinGameIdsRef = useRef<Set<string>>(new Set());
-  // Generated once per session (lazy initializer), not per game — the New Game modal must
-  // never reshuffle who "Player 1"/"Player 2" look like (bug report: editing the goal
-  // score was reshuffling avatars/names because they used to be regenerated per game.id).
   const [identities] = useState(() => generatePlayerIdentities());
 
   useEffect(() => {
@@ -123,10 +100,6 @@ export function useGameSession({ onSessionExpired, onLogout }: UseGameSessionOpt
       .then((games) => {
         const inProgressGame = games[0] ?? null;
         setGame(inProgressGame);
-        // Every login/register opens the New Game modal (product requirement: never
-        // silently resume straight to an old game's scores). If an in-progress game exists
-        // it's still fetched and shown behind the modal — Cancel (available whenever a game
-        // exists, same as the mid-game "New Game" button) lets the player return to it.
         setShowNewGameModal(true);
         setLoading(false);
       })
@@ -138,9 +111,7 @@ export function useGameSession({ onSessionExpired, onLogout }: UseGameSessionOpt
         setErrorMessage(friendlyErrorMessage(error));
         setLoading(false);
       });
-    // Runs once on mount only — re-fetching on every render would clobber in-flight
-    // game state after roll/hold already updated it locally (lesson L003).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount only
   }, []);
 
   async function runAction(action: () => Promise<GameActionResult>): Promise<boolean> {
@@ -160,9 +131,6 @@ export function useGameSession({ onSessionExpired, onLogout }: UseGameSessionOpt
         return false;
       }
       if (error instanceof ApiError && error.errorCode === 'GAME_ABANDONED') {
-        // §8: a GAME_ABANDONED response shows a distinct notice and reloads the
-        // in-progress list — the abandon+create transaction (M3b) may already have a
-        // fresh game waiting.
         setErrorMessage('This game was abandoned. Loading your latest game…');
         try {
           const games = await listInProgressGames();
@@ -181,16 +149,6 @@ export function useGameSession({ onSessionExpired, onLogout }: UseGameSessionOpt
     }
   }
 
-  // The AI seat plays itself (§9): whenever it becomes the AI's turn, wait
-  // AI_TURN_THINK_DELAY_MS (so the move reads as "thinking" rather than instant, and the
-  // loading icon on its PlayerCard has something to show), then call ai-turn once and let
-  // the resulting state change re-trigger this effect — it stops on its own once the seat
-  // passes (bust/hold), a forfeit hands the turn back, or the game ends. Gated on `busy` so
-  // it never overlaps a human action or a previous ai-turn call in flight, and on
-  // `showNewGameModal` so it can't keep auto-playing the game being replaced — without that
-  // gate, an ai-turn response could resolve after the New Game modal already created a new
-  // game and clobber it with the old game's state (bug report: selecting AI got "stuck"
-  // showing the previous game).
   useEffect(() => {
     if (!game || busy || showNewGameModal) {
       return;
@@ -204,22 +162,15 @@ export function useGameSession({ onSessionExpired, onLogout }: UseGameSessionOpt
       void runAction(() => aiTurnGame(game.id, game.version)).finally(() => setAiThinking(false));
     }, AI_TURN_THINK_DELAY_MS);
     return () => window.clearTimeout(timeoutId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runAction is stable across renders
   }, [game, busy, showNewGameModal]);
 
-  // Tracks whether the AI has ever taken a seat this session — see the aiHasPlayed
-  // declaration above for why this must never be un-set.
   useEffect(() => {
     if (game?.mode === 'ai') {
       setAiHasPlayed(true);
     }
   }, [game]);
 
-  // Counts a win exactly once per finished game (guarded by countedWinGameIdsRef, since
-  // `game` changes reference on every action and would otherwise re-fire this effect for
-  // the same already-finished game) and plays the victory chime alongside it. Attributed by
-  // fixed identity (seat1/seat2/ai), not by raw seat number, so a seat's win history stays
-  // with whoever actually won it rather than following the seat when the AI takes it over.
   useEffect(() => {
     if (!game || game.status !== 'finished' || game.winnerSeat === null) {
       return;
@@ -263,9 +214,6 @@ export function useGameSession({ onSessionExpired, onLogout }: UseGameSessionOpt
     await runAction(() => holdGame(game.id, game.version));
   }
 
-  // The server-side session cookie is httpOnly and cleared by /auth/logout — if that call
-  // fails (e.g. the session already expired), the user still expects the click to leave
-  // them logged out locally, so onLogout runs in `finally` rather than only on success.
   async function handleLogout(): Promise<void> {
     try {
       await logout();

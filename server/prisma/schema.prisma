@@ -1,6 +1,5 @@
-// Data model per docs/plans/plan_v6.md §2. DB-level invariants (CHECK constraints,
-// triggers, the partial unique index) are NOT expressible in Prisma's schema DSL — they
-// live in a hand-written raw-SQL migration (see migrations/20260904000100_db_invariants/)
+// DB-level invariants (CHECK constraints, triggers, the partial unique index) are NOT
+// expressible in Prisma's schema DSL — they live in a hand-written raw-SQL migration
 // layered on top of the tables this file generates.
 
 generator client {
@@ -32,10 +31,10 @@ enum MoveKind {
 model User {
   id           String   @id @default(cuid())
   username     String
-  usernameKey  String   @unique // trim + NFKC + lowercase, set by the auth service (M1)
+  usernameKey  String   @unique
   passwordHash String
-  tokenVersion Int      @default(0) // bumped to revoke every outstanding JWT
-  wins         Int      @default(0) // Extra 1 — human-only win counter
+  tokenVersion Int      @default(0)
+  wins         Int      @default(0)
   createdAt    DateTime @default(now())
   games        Game[]
 }
@@ -46,10 +45,10 @@ model Game {
   owner       User       @relation(fields: [ownerUserId], references: [id])
   mode        GameMode   @default(human)
   aiSeat      Int? // 1 | 2 when mode = ai; DB CHECK ties this to `mode`
-  aiMoveCount Int        @default(0) // successful AI moves only; hard cap 50 (I1)
-  targetScore Int // 10-1000, set only at create
+  aiMoveCount Int        @default(0) // successful moves only; DB CHECK caps this at 50
+  targetScore Int
   status      GameStatus @default(in_progress)
-  currentSeat Int        @default(1) // 1 | 2
+  currentSeat Int        @default(1)
   p1Score     Int        @default(0)
   p2Score     Int        @default(0)
   roundScore  Int        @default(0)

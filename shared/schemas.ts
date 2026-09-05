@@ -1,10 +1,5 @@
 import { z } from 'zod';
 
-// Single source of truth for the API contract (plan_v6.md §5). Both `server/` and
-// `client/` import these schemas and derive their DTO types from them — neither side
-// hand-rolls a parallel type. M2: schemas only, no route/auth/DB implementation.
-
-/** A single die face, 1–6. */
 const DieSchema = z.union([
   z.literal(1),
   z.literal(2),
@@ -17,12 +12,8 @@ const DieSchema = z.union([
 const TARGET_SCORE_MIN: number = 10;
 const TARGET_SCORE_MAX: number = 1000;
 
-/**
- * What happened on the game's most recent turn action. `busted` on the `roll` variant
- * is the only stored source of truth for whether the last roll busted the round — see
- * `GameStateSchema`'s `.transform`, which is the single place the top-level `busted`
- * field on the DTO is derived from it (I6).
- */
+// The top-level `busted` field on GameStateSchema is derived from this via `.transform`
+// below — there is no separately stored `busted` flag.
 const LastMoveSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('roll'),
@@ -39,11 +30,6 @@ const LastMoveSchema = z.discriminatedUnion('kind', [
     ),
 ]);
 
-/**
- * Full game state DTO. Every field's nullability and numeric bounds are pinned so
- * `NaN`/fractions/negatives/out-of-range values can never pass validation, in either
- * direction. `busted` is NOT a stored field — see the `.transform` below (I6).
- */
 export const GameStateSchema = z
   .object({
     id: z.string(),
@@ -78,10 +64,7 @@ export const GameStateSchema = z
 
 export type GameStateDto = z.infer<typeof GameStateSchema>;
 
-/**
- * Body for `POST /games`. The `mode`/`aiSeat` cross-field rule mirrors the DB CHECKs in
- * `server/prisma/schema.prisma` — an impossible game is impossible to store either way.
- */
+// The mode/aiSeat cross-field rule mirrors the DB CHECKs in server/prisma/schema.prisma.
 export const CreateGameInputSchema = z
   .object({
     targetScore: z.number().int().min(TARGET_SCORE_MIN).max(TARGET_SCORE_MAX),
@@ -103,7 +86,6 @@ export const CreateGameInputSchema = z
 
 export type CreateGameInput = z.infer<typeof CreateGameInputSchema>;
 
-/** Body for `POST /games/:id/roll`, `/hold`, and `/ai-turn` — optimistic-concurrency guard. */
 export const ExpectedVersionSchema = z
   .object({
     expectedVersion: z.number().int().nonnegative(),
@@ -115,12 +97,6 @@ export type ExpectedVersionInput = z.infer<typeof ExpectedVersionSchema>;
 const LIST_GAMES_DEFAULT_LIMIT: number = 10;
 const LIST_GAMES_MAX_LIMIT: number = 50;
 
-/**
- * Query for `GET /games?status=in_progress`. `in_progress` is the only status this
- * endpoint lists (the DB's one-live-game partial unique index already caps the result at
- * one row per owner) — `limit` exists to bound the response shape, not because more than
- * one row is expected.
- */
 export const ListGamesQuerySchema = z
   .object({
     status: z.literal('in_progress'),
@@ -139,20 +115,15 @@ export type ListGamesQuery = z.infer<typeof ListGamesQuerySchema>;
 const USERNAME_MIN_LENGTH: number = 3;
 const USERNAME_MAX_LENGTH: number = 30;
 const PASSWORD_MIN_LENGTH: number = 8;
-const PASSWORD_MAX_BYTE_LENGTH: number = 72; // bcrypt's hard limit
+const PASSWORD_MAX_BYTE_LENGTH: number = 72;
 
-/**
- * Raw username as submitted. Normalization (trim + NFKC + lowercase → `usernameKey`) is
- * a server-side concern applied before the uniqueness check — this schema only bounds
- * the length of what the client is allowed to send.
- */
 const UsernameSchema = z
   .string()
   .min(USERNAME_MIN_LENGTH)
   .max(USERNAME_MAX_LENGTH)
   .describe('Normalized server-side (trim + NFKC + lowercase) before length/uniqueness checks.');
 
-/** UTF-8 byte length, not JS string length — bcrypt truncates past 72 bytes. */
+// Byte length, not JS string length — bcrypt truncates past 72 bytes, and those can differ.
 function utf8ByteLength(value: string): number {
   return new TextEncoder().encode(value).length;
 }
@@ -167,7 +138,6 @@ const PasswordSchema = z
     `At least ${PASSWORD_MIN_LENGTH} characters and at most ${PASSWORD_MAX_BYTE_LENGTH} UTF-8 bytes.`,
   );
 
-/** Body for `POST /auth/register` and `POST /auth/login`. */
 export const AuthCredentialsInputSchema = z
   .object({
     username: UsernameSchema,
@@ -177,7 +147,7 @@ export const AuthCredentialsInputSchema = z
 
 export type AuthCredentialsInput = z.infer<typeof AuthCredentialsInputSchema>;
 
-/** Response body for register/login — no `{ token }`; the JWT is set as an HttpOnly cookie. */
+// No `{ token }` field — the JWT is set as an HttpOnly cookie, never returned in the body.
 export const AuthResponseSchema = z
   .object({
     user: z.object({

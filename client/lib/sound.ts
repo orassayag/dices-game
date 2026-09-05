@@ -1,4 +1,3 @@
-// C5, E5, G5, C6 — an ascending major-arpeggio victory chime.
 const WIN_CHIME_NOTES_HZ: number[] = [523.25, 659.25, 783.99, 1046.5];
 const WIN_CHIME_NOTE_DURATION_SECONDS: number = 0.18;
 const WIN_CHIME_NOTE_GAP_SECONDS: number = 0.12;
@@ -14,10 +13,8 @@ interface WindowWithWebkitAudioContext extends Window {
   webkitAudioContext?: typeof AudioContext;
 }
 
-/** Synthesizes a short victory chime via the Web Audio API instead of shipping an audio
- * asset — no file to license or fetch, and it works fully offline. No-ops silently where
- * AudioContext is unavailable (older browsers, some test/jsdom environments) rather than
- * throwing, since a missing win sound must never break the win flow itself. */
+// No-ops silently where AudioContext is unavailable, since a missing win sound must
+// never break the win flow itself.
 export function playWinSound(): void {
   const AudioContextClass: typeof AudioContext | undefined =
     window.AudioContext ?? (window as WindowWithWebkitAudioContext).webkitAudioContext;

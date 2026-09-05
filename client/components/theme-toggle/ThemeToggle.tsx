@@ -1,8 +1,6 @@
 import { Moon, Sun } from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
 
-/** Fixed-position day/night toggle, mounted once at the app root so it's reachable from
- * every screen (login and game alike) without each screen wiring its own theme state. */
 export function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === 'dark';

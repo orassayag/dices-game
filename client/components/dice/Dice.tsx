@@ -21,9 +21,8 @@ const PIPS_BY_FACE: Record<DiceValue, PipPosition[]> = {
   6: ['tl', 'tr', 'ml', 'mr', 'bl', 'br'],
 };
 
-// Fixed per-face landing rotations, reused verbatim from the reference 3D-dice markup
-// (dices-ref.txt) — each combination of whole turns was hand-tuned there so every face
-// lands right-side-up when the cube stops; deriving them from cube geometry isn't needed.
+// Hand-tuned so every face lands right-side-up when the cube stops — not derived from
+// cube geometry, so don't try to "simplify" the turn counts.
 const FACE_TRANSFORMS: Record<DiceValue, string> = {
   1: 'rotateX(1turn) rotateY(-3.5turn) rotateZ(0) translateZ(calc(var(--dice-size) * -1))',
   2: 'rotateX(2turn) rotateY(5.25turn) rotateZ(0) translateZ(calc(var(--dice-size) * -1))',
@@ -36,9 +35,6 @@ const FACE_TRANSFORMS: Record<DiceValue, string> = {
 const IDLE_TRANSFORM: string =
   'rotateX(8.5turn) rotateY(6turn) rotateZ(0) translateZ(calc(var(--dice-size) * -1))';
 
-/** A single real 3D die. Cycles through faces while `rolling` to look like a tumble,
- * then settles on `value` once rolling stops (or shows an idle resting pose before the
- * first roll, when `value` is null). */
 export function Dice({ value, rolling }: DiceProps) {
   const tumbleFace = useDiceTumble({ value, rolling });
 

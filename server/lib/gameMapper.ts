@@ -1,8 +1,5 @@
-// Maps a Prisma Game row + its latest Move row to the API's GameStateDto, field by
-// field — never `...game` spread (plan_v6.md §1). `lastMove` is derived from the most
-// recent Move row rather than stored on Game; `busted` is in turn derived from
-// `lastMove` by GameStateSchema's own transform (I6) — this mapper never sets it.
-
+// Maps field by field — never `...game` spread — so a new Prisma column is never
+// accidentally exposed on the DTO without an explicit decision to add it here.
 import type { Game, Move } from '@prisma/client';
 import { GameStateSchema, type GameStateDto } from '../../shared/index.js';
 
@@ -22,9 +19,8 @@ function mapLastMove(move: Move | null | undefined): RawLastMove {
   return { kind: 'forfeit' };
 }
 
-// `.parse` re-validates every field at runtime (numeric bounds, dice ranges, the
-// mode/aiSeat pairing) even though the values came from our own DB — cheap defense in
-// depth against a future write path that skips this mapper, and it's what derives the
+// `.parse`, not a cast, even though these values came from our own DB — cheap defense in
+// depth against a future write path that skips validation, and it's what derives the
 // top-level `busted` field from `lastMove`.
 export function mapGameToDto(game: Game, latestMove: Move | null | undefined): GameStateDto {
   return GameStateSchema.parse({

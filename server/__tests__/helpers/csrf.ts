@@ -1,14 +1,11 @@
 import type { Express } from 'express';
 import request from 'supertest';
 
-// Matches vitest.setup.server.ts's FRONTEND_URL — the Origin every CSRF-guarded test
-// request must present to pass csrfProtection's allowlist check (server/middleware/csrf.ts).
+// Must match vitest.setup.server.ts's FRONTEND_URL to pass csrfProtection's Origin check.
 export const TEST_FRONTEND_ORIGIN: string = 'http://localhost:5173';
 export const CSRF_HEADER_NAME: string = 'X-CSRF-Token';
 
-// Outside production env.cookie.csrfCookieName is the plain 'csrfToken' name (the
-// `__Host-` prefix only applies when NODE_ENV=production — see server/config/env.ts);
-// tests run with NODE_ENV=test, so this matches what the server actually sets.
+// The `__Host-` prefix only applies when NODE_ENV=production; tests run with NODE_ENV=test.
 const CSRF_COOKIE_NAME: string = 'csrfToken';
 
 // supertest types `set-cookie` as `string | string[] | undefined`.
@@ -38,9 +35,6 @@ export interface CsrfContext {
   cookieHeader: string;
 }
 
-// Fetches a pre-auth CSRF token the way a real client would before submitting
-// login/register (I9, plan_v6.md §5/§10) — every CSRF-guarded pre-auth request in tests
-// needs this pairing plus a matching Origin header (see withCsrfHeaders below).
 export async function fetchPreAuthCsrf(app: Express): Promise<CsrfContext> {
   const response = await request(app).get('/auth/csrf');
   const token = extractCookieValue(extractSetCookieHeaders(response), CSRF_COOKIE_NAME);

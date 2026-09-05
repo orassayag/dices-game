@@ -12,9 +12,6 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   secondary: 'border border-border bg-surface-alt text-foreground hover:bg-surface-alt-hover',
 };
 
-/** Shared button styling for every primary/secondary call-to-action in the app (Roll,
- * Hold, New Game, Login/Register) so the design stays consistent in one place instead of
- * repeating the same Tailwind class string at each call site. */
 export function Button({ variant = 'primary', icon, className = '', children, ...rest }: ButtonProps) {
   return (
     <button

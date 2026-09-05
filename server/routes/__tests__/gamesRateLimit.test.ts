@@ -1,6 +1,6 @@
 // @vitest-environment node
-// Own file for the same reason as authLoginRateLimit.test.ts: the gameplay rate limiter
-// is a module-level singleton, and this test deliberately exhausts a user's bucket.
+// Own file: the gameplay rate limiter is a module-level singleton, and this test
+// deliberately exhausts a user's bucket.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createApp } from '../../app.js';
 import { truncateAll } from '../../__tests__/helpers/testDb.js';

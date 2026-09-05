@@ -24,9 +24,6 @@ export type ConfettiPiece =
       rotationDeg: number;
     };
 
-// Colors and fall-physics adapted from confety.txt's reference confetti effect; the
-// coin/dollar-bill pieces from that reference are approximated here as emoji glyphs
-// mixed in with the colored shreds, rather than reproducing its per-element SCSS/SVG.
 const CONFETTI_PIECE_COUNT: number = 140;
 const CONFETTI_COLORS: string[] = ['#146ff5', '#dd1a8f', '#ee6f40', '#3adcc8', '#8154e2', '#f5a623'];
 const CONFETTI_ICONS: string[] = ['💰', '💵', '🪙', '⭐', '🎉'];
@@ -43,12 +40,8 @@ function createPieces(): ConfettiPiece[] {
       id: index,
       leftPercent: randomBetween(0, 100),
       // A negative animation-delay starts the piece already mid-fall instead of at the
-      // top — spread across the whole duration, this makes the very first frame look
-      // like an already-running rain rather than a synchronized burst. Combined with
-      // `animation-iteration-count: infinite` (confetti.css) each piece loops forever on
-      // its own, so the effect never needs to be regenerated/replaced — the old
-      // regenerate-on-interval approach swapped the whole piece array every 2.6s, which
-      // unmounted every still-falling piece and made the effect visibly stop and restart.
+      // top, so the first frame reads as an already-running rain rather than a
+      // synchronized burst.
       delaySeconds: randomBetween(-durationSeconds, 0),
       durationSeconds,
       driftPx: randomBetween(-80, 80),
@@ -74,11 +67,6 @@ function createPieces(): ConfettiPiece[] {
   });
 }
 
-/** Generates a fresh confetti burst whenever `active` flips true, and clears it the
- * moment it flips back to false — Confetti consumes this and only renders the pieces.
- * Each piece then loops forever via CSS (`animation-iteration-count: infinite` in
- * confetti.css) rather than being regenerated on a timer, so the effect never visibly
- * stops and restarts. */
 export function useConfettiPieces(active: boolean): ConfettiPiece[] | null {
   const [pieces, setPieces] = useState<ConfettiPiece[] | null>(null);
 
