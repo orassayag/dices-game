@@ -21,6 +21,7 @@ describe('apiRequest', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   it('should send credentials: include on every request', async () => {
@@ -62,6 +63,7 @@ describe('apiRequest', () => {
   });
 
   it('should retry a 503 SERVICE_UNAVAILABLE and return the eventual success', async () => {
+    vi.useFakeTimers();
     const serviceUnavailable = mockFetchResponse(503, {
       error: { code: 'SERVICE_UNAVAILABLE', message: 'Try again.' },
     });
@@ -70,16 +72,24 @@ describe('apiRequest', () => {
       .mockResolvedValueOnce(serviceUnavailable)
       .mockResolvedValueOnce(mockFetchResponse(200, { ok: true }));
 
-    await expect(apiRequest('/games')).resolves.toEqual({ ok: true });
+    const resultPromise = apiRequest('/games');
+    await vi.runAllTimersAsync();
+
+    await expect(resultPromise).resolves.toEqual({ ok: true });
     expect(fetch).toHaveBeenCalledTimes(3);
   });
 
   it('should give up after exhausting 503 retries and throw the SERVICE_UNAVAILABLE ApiError', async () => {
+    vi.useFakeTimers();
     const serviceUnavailable = mockFetchResponse(503, {
       error: { code: 'SERVICE_UNAVAILABLE', message: 'Try again.' },
     });
     vi.mocked(fetch).mockResolvedValue(serviceUnavailable);
 
-    await expect(apiRequest('/games')).rejects.toMatchObject({ errorCode: 'SERVICE_UNAVAILABLE' });
+    const assertion = expect(apiRequest('/games')).rejects.toMatchObject({
+      errorCode: 'SERVICE_UNAVAILABLE',
+    });
+    await vi.runAllTimersAsync();
+    await assertion;
   });
 });
