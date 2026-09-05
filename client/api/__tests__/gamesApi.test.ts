@@ -6,6 +6,7 @@ import {
   aiTurnGame,
   createGame,
   getGame,
+  getLeaderboard,
   holdGame,
   listInProgressGames,
   rollGame,
@@ -54,6 +55,17 @@ describe('gamesApi', () => {
       method: 'POST',
       body: { targetScore: 100, mode: 'human' },
     });
+  });
+
+  it('should GET the leaderboard', async () => {
+    const spy = vi
+      .spyOn(apiClient, 'apiRequest')
+      .mockResolvedValue([{ name: 'Ryan Mitchell', wins: 3 }]);
+
+    const result = await getLeaderboard();
+
+    expect(spy).toHaveBeenCalledWith('/games/leaderboard');
+    expect(result).toEqual([{ name: 'Ryan Mitchell', wins: 3 }]);
   });
 
   it('should GET a game by id', async () => {

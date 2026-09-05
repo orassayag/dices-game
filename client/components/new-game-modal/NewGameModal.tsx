@@ -1,9 +1,10 @@
-import { type FormEvent, type KeyboardEvent } from 'react';
+import { useState, type FormEvent, type KeyboardEvent } from 'react';
 import { X } from 'lucide-react';
 import { Button } from '../button/Button';
 
 const TARGET_SCORE_MIN: number = 10;
 const TARGET_SCORE_MAX: number = 1000;
+const TARGET_SCORE_ERROR: string = `Goal score must be between ${TARGET_SCORE_MIN} and ${TARGET_SCORE_MAX}.`;
 
 interface NewGameModalProps {
   targetScore: number;
@@ -29,8 +30,18 @@ export function NewGameModal({
   onCancel,
   busy,
 }: NewGameModalProps) {
+  const [targetScoreError, setTargetScoreError] = useState<string | null>(null);
+  // Bumped on each failed submit so the input remounts (via key) and replays the shake,
+  // mirroring the login form's field-error behaviour.
+  const [shakeKey, setShakeKey] = useState<number>(0);
+
   function handleSubmit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault();
+    if (targetScore < TARGET_SCORE_MIN || targetScore > TARGET_SCORE_MAX) {
+      setTargetScoreError(TARGET_SCORE_ERROR);
+      setShakeKey((key) => key + 1);
+      return;
+    }
     onSubmit();
   }
 
@@ -45,6 +56,7 @@ export function NewGameModal({
     if (Number.isNaN(parsed) || parsed < 0) {
       return;
     }
+    setTargetScoreError(null);
     onTargetScoreChange(parsed);
   }
 
@@ -73,6 +85,7 @@ export function NewGameModal({
         <label className="flex flex-col gap-1 text-sm">
           Goal score
           <input
+            key={shakeKey}
             type="number"
             value={targetScore}
             onChange={(event) => handleTargetScoreChange(event.target.value)}
@@ -81,8 +94,16 @@ export function NewGameModal({
             max={TARGET_SCORE_MAX}
             spellCheck={false}
             required
-            className="rounded-lg border border-border bg-surface-alt px-3 py-2 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            aria-invalid={Boolean(targetScoreError)}
+            className={`rounded-lg border px-3 py-2 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
+              targetScoreError ? 'field-shake border-danger' : 'border-border bg-surface-alt'
+            }`}
           />
+          {targetScoreError && (
+            <span role="alert" className="text-xs font-medium text-danger">
+              {targetScoreError}
+            </span>
+          )}
         </label>
         <label className="flex flex-col gap-1 text-sm">
           Opponent

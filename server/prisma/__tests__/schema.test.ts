@@ -21,6 +21,8 @@ async function insertGameRaw(overrides: Record<string, string> = {}): Promise<vo
     id: `'${crypto.randomUUID()}'`,
     ownerUserId: `'${ownerUserId}'`,
     mode: `'human'`,
+    p1Name: `'Player 1'`,
+    p2Name: `'Player 2'`,
     aiSeat: 'NULL',
     aiMoveCount: '0',
     targetScore: '100',

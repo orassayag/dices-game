@@ -116,6 +116,8 @@ export function useAuthForm({ onAuthenticated }: UseAuthFormOptions): UseAuthFor
   function switchMode(): void {
     setMode((current) => (current === 'login' ? 'register' : 'login'));
     setShowPassword(false);
+    setErrorMessage(null);
+    setFieldErrors({});
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {

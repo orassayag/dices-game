@@ -162,4 +162,40 @@ describe('useAuthForm', () => {
     expect(result.current.showPassword).toBe(false);
     expect(result.current.mode).toBe('register');
   });
+
+  it('should clear a submit error message when switching mode', async () => {
+    vi.spyOn(authApi, 'login').mockRejectedValue(
+      new ApiError('INVALID_CREDENTIALS', 'nope', 401),
+    );
+    const { result } = renderHook(() => useAuthForm({ onAuthenticated: vi.fn() }));
+    act(() => {
+      result.current.handleUsernameChange('alice');
+      result.current.handlePasswordChange('password123');
+    });
+    await act(async () => {
+      await result.current.handleSubmit(submitEvent());
+    });
+    await waitFor(() =>
+      expect(result.current.errorMessage).toBe('Invalid username or password.'),
+    );
+
+    act(() => result.current.switchMode());
+
+    expect(result.current.errorMessage).toBeNull();
+  });
+
+  it('should clear field errors when switching mode', async () => {
+    const { result } = renderHook(() => useAuthForm({ onAuthenticated: vi.fn() }));
+    act(() => {
+      result.current.handleUsernameChange('ab');
+    });
+    await act(async () => {
+      await result.current.handleSubmit(submitEvent());
+    });
+    expect(result.current.fieldErrors.username).toMatch(/at least 3 characters/);
+
+    act(() => result.current.switchMode());
+
+    expect(result.current.fieldErrors.username).toBeUndefined();
+  });
 });

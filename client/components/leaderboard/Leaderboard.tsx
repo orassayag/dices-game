@@ -4,6 +4,8 @@ import { Trophy } from 'lucide-react';
 // row's actual rendered height (padding + line height) or rows would overlap/gap on reorder.
 const LEADERBOARD_ROW_HEIGHT_PX: number = 44;
 const LEADERBOARD_REORDER_TRANSITION_MS: number = 500;
+// Beyond this many rows the board scrolls instead of growing past the viewport.
+const LEADERBOARD_MAX_VISIBLE_ROWS: number = 8;
 
 export interface LeaderboardEntry {
   id: string;
@@ -28,35 +30,40 @@ export function Leaderboard({ entries }: LeaderboardProps) {
       <p className="border-b border-border px-3 py-1.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
         Leaderboard
       </p>
-      <div className="relative" style={{ height: LEADERBOARD_ROW_HEIGHT_PX * entries.length }}>
-        {entries.map((entry) => {
-          const rank: number = ranked.findIndex((rankedEntry) => rankedEntry.id === entry.id);
-          return (
-            <div
-              key={entry.id}
-              className="absolute inset-x-0 flex items-center gap-2 px-3 transition-transform ease-out"
-              style={{
-                height: LEADERBOARD_ROW_HEIGHT_PX,
-                transform: `translateY(${rank * LEADERBOARD_ROW_HEIGHT_PX}px)`,
-                transitionDuration: `${LEADERBOARD_REORDER_TRANSITION_MS}ms`,
-              }}
-            >
-              <span
-                aria-hidden="true"
-                className="w-4 shrink-0 text-center text-xs text-muted-foreground"
+      <div
+        className="overflow-y-auto"
+        style={{ maxHeight: LEADERBOARD_ROW_HEIGHT_PX * LEADERBOARD_MAX_VISIBLE_ROWS }}
+      >
+        <div className="relative" style={{ height: LEADERBOARD_ROW_HEIGHT_PX * entries.length }}>
+          {entries.map((entry) => {
+            const rank: number = ranked.findIndex((rankedEntry) => rankedEntry.id === entry.id);
+            return (
+              <div
+                key={entry.id}
+                className="absolute inset-x-0 flex items-center gap-2 px-3 transition-transform ease-out"
+                style={{
+                  height: LEADERBOARD_ROW_HEIGHT_PX,
+                  transform: `translateY(${rank * LEADERBOARD_ROW_HEIGHT_PX}px)`,
+                  transitionDuration: `${LEADERBOARD_REORDER_TRANSITION_MS}ms`,
+                }}
               >
-                {rank + 1}
-              </span>
-              <span className="flex flex-1 items-center gap-1 truncate text-sm font-medium">
-                <span className="truncate">{entry.name}</span>
-                {rank === 0 && !isTiedLead && (
-                  <Trophy size={14} aria-hidden="true" className="shrink-0 text-warning" />
-                )}
-              </span>
-              <span className="text-sm font-bold text-accent">{entry.wins}</span>
-            </div>
-          );
-        })}
+                <span
+                  aria-hidden="true"
+                  className="w-4 shrink-0 text-center text-xs text-muted-foreground"
+                >
+                  {rank + 1}
+                </span>
+                <span className="flex flex-1 items-center gap-1 truncate text-sm font-medium">
+                  <span className="truncate">{entry.name}</span>
+                  {rank === 0 && !isTiedLead && (
+                    <Trophy size={14} aria-hidden="true" className="shrink-0 text-warning" />
+                  )}
+                </span>
+                <span className="text-sm font-bold text-accent">{entry.wins}</span>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

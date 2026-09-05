@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GameStateDto } from '../../../../shared/index';
 import { GamePage } from '../GamePage';
 import { ApiError } from '../../../api/apiClient';
@@ -30,6 +30,10 @@ function freshGame(overrides: Partial<GameStateDto> = {}): GameStateDto {
 }
 
 describe('GamePage', () => {
+  beforeEach(() => {
+    vi.spyOn(gamesApi, 'getLeaderboard').mockResolvedValue([]);
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -222,7 +226,9 @@ describe('GamePage', () => {
       await user.click(screen.getByRole('button', { name: "Let's Go!" }));
 
       await waitFor(() =>
-        expect(createSpy).toHaveBeenCalledWith({ targetScore: 100, mode: 'ai', aiSeat: 2 }),
+        expect(createSpy).toHaveBeenCalledWith(
+          expect.objectContaining({ targetScore: 100, mode: 'ai', aiSeat: 2 }),
+        ),
       );
     });
   });

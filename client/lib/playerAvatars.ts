@@ -1,3 +1,9 @@
+import { AI_PLAYER_NAME } from '../../shared/index';
+
+// Re-exported so display code can keep importing it from here, while the value stays
+// sourced from the shared contract the server also reads.
+export { AI_PLAYER_NAME };
+
 export interface PlayerIdentity {
   name: string;
   avatarImageId: number;
@@ -43,7 +49,6 @@ const FALLBACK_AVATAR_BACKGROUND_COLOR: string = '#6b7280';
 
 // This avatar's host must be in the CSP img-src allowlist (server/app.ts) or the
 // browser blocks it.
-export const AI_PLAYER_NAME: string = 'AI Dices BOT';
 export const AI_PLAYER_AVATAR_URL: string =
   'https://img.magnific.com/free-vector/chatbot-chat-message-vectorart_78370-4104.jpg';
 

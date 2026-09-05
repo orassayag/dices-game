@@ -13,6 +13,7 @@ import { validateBody } from '../middleware/validate.js';
 import {
   createGame,
   getGame,
+  getLeaderboard,
   holdGame,
   listInProgressGames,
   rollGame,
@@ -60,6 +61,19 @@ gamesRouter.post(
     try {
       const game = await createGame(requireUserId(req), req.body);
       res.status(201).json(game);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// Registered before '/:id' so Express does not match "leaderboard" as a game id.
+gamesRouter.get(
+  '/leaderboard',
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const leaderboard = await getLeaderboard(requireUserId(req));
+      res.status(200).json(leaderboard);
     } catch (error) {
       next(error);
     }

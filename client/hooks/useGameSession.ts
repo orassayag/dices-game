@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import type { CreateGameInput, GameStateDto } from '../../shared/index';
+import type { CreateGameInput, GameStateDto, LeaderboardEntryDto } from '../../shared/index';
 import { ApiError } from '../api/apiClient';
 import { logout } from '../api/authApi';
 import {
   aiTurnGame,
   createGame,
+  getLeaderboard,
   holdGame,
   listInProgressGames,
   rollGame,
   type GameActionResult,
 } from '../api/gamesApi';
-import type { WinCounts } from '../components/game-board/GameBoard';
 import { createLogger } from '../lib/logger';
 import { generatePlayerIdentities, type PlayerIdentities } from '../lib/playerAvatars';
 import { playWinSound } from '../lib/sound';
@@ -63,8 +63,7 @@ interface UseGameSessionResult {
   errorMessage: string | null;
   infoMessage: string | null;
   aiThinking: boolean;
-  wins: WinCounts;
-  aiHasPlayed: boolean;
+  leaderboard: LeaderboardEntryDto[];
   identities: PlayerIdentities;
   setTargetScoreInput: (value: number) => void;
   setModeInput: (value: 'human' | 'ai') => void;
@@ -89,13 +88,23 @@ export function useGameSession({ onSessionExpired, onLogout }: UseGameSessionOpt
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [aiThinking, setAiThinking] = useState<boolean>(false);
-  const [wins, setWins] = useState<WinCounts>({ seat1: 0, seat2: 0, ai: 0 });
-  // Deliberately sticky: set to true once, never reset back to false.
-  const [aiHasPlayed, setAiHasPlayed] = useState<boolean>(false);
-  const countedWinGameIdsRef = useRef<Set<string>>(new Set());
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntryDto[]>([]);
+  // Guards the win sound + leaderboard refetch to fire exactly once per finished game.
+  const scoredGameIdsRef = useRef<Set<string>>(new Set());
   const [identities] = useState(() => generatePlayerIdentities());
 
+  async function refreshLeaderboard(): Promise<void> {
+    try {
+      setLeaderboard(await getLeaderboard());
+    } catch (error) {
+      logger.warn('Failed to refresh leaderboard', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   useEffect(() => {
+    void refreshLeaderboard();
     listInProgressGames()
       .then((games) => {
         const inProgressGame = games[0] ?? null;
@@ -166,37 +175,32 @@ export function useGameSession({ onSessionExpired, onLogout }: UseGameSessionOpt
   }, [game, busy, showNewGameModal]);
 
   useEffect(() => {
-    if (game?.mode === 'ai') {
-      setAiHasPlayed(true);
-    }
-  }, [game]);
-
-  useEffect(() => {
     if (!game || game.status !== 'finished' || game.winnerSeat === null) {
       return;
     }
-    if (countedWinGameIdsRef.current.has(game.id)) {
+    if (scoredGameIdsRef.current.has(game.id)) {
       return;
     }
-    countedWinGameIdsRef.current.add(game.id);
-    const winnerSeat: 1 | 2 = game.winnerSeat;
-    const winnerIsAi: boolean = game.mode === 'ai' && winnerSeat === game.aiSeat;
-    const winnerKey: keyof WinCounts = winnerIsAi ? 'ai' : winnerSeat === 1 ? 'seat1' : 'seat2';
-    setWins((current) => ({ ...current, [winnerKey]: current[winnerKey] + 1 }));
+    scoredGameIdsRef.current.add(game.id);
     playWinSound();
+    // The winning move already persisted the win server-side; pull the fresh standings.
+    void refreshLeaderboard();
   }, [game]);
 
   async function handleCreate(): Promise<void> {
     const succeeded = await runAction(async () => {
+      const seatNames = { p1Name: identities.seat1.name, p2Name: identities.seat2.name };
       const input: CreateGameInput =
         modeInput === 'ai'
-          ? { targetScore: targetScoreInput, mode: 'ai', aiSeat: aiSeatInput }
-          : { targetScore: targetScoreInput, mode: 'human' };
+          ? { targetScore: targetScoreInput, mode: 'ai', aiSeat: aiSeatInput, ...seatNames }
+          : { targetScore: targetScoreInput, mode: 'human', ...seatNames };
       const state = await createGame(input);
       return { state, versionConflictRecovered: false };
     });
     if (succeeded) {
       setShowNewGameModal(false);
+      // Both seat names are now registered server-side; surface them at zero wins.
+      void refreshLeaderboard();
     }
   }
 
@@ -247,8 +251,7 @@ export function useGameSession({ onSessionExpired, onLogout }: UseGameSessionOpt
     errorMessage,
     infoMessage,
     aiThinking,
-    wins,
-    aiHasPlayed,
+    leaderboard,
     identities,
     setTargetScoreInput,
     setModeInput,

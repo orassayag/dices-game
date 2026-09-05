@@ -11,6 +11,7 @@ const DieSchema = z.union([
 
 const TARGET_SCORE_MIN: number = 10;
 const TARGET_SCORE_MAX: number = 1000;
+const PLAYER_NAME_MAX_LENGTH: number = 40;
 
 // The top-level `busted` field on GameStateSchema is derived from this via `.transform`
 // below — there is no separately stored `busted` flag.
@@ -73,6 +74,24 @@ export const CreateGameInputSchema = z
       .union([z.literal(1), z.literal(2)])
       .optional()
       .describe('Required (1 or 2) when mode is "ai"; must be omitted when mode is "human".'),
+    p1Name: z
+      .string()
+      .trim()
+      .min(1)
+      .max(PLAYER_NAME_MAX_LENGTH)
+      .optional()
+      .describe(
+        'Display name for seat 1; server defaults to "Player 1" and forces the AI name when the AI holds this seat.',
+      ),
+    p2Name: z
+      .string()
+      .trim()
+      .min(1)
+      .max(PLAYER_NAME_MAX_LENGTH)
+      .optional()
+      .describe(
+        'Display name for seat 2; server defaults to "Player 2" and forces the AI name when the AI holds this seat.',
+      ),
   })
   .strict()
   .refine(
@@ -111,6 +130,16 @@ export const ListGamesQuerySchema = z
   .strict();
 
 export type ListGamesQuery = z.infer<typeof ListGamesQuerySchema>;
+
+// One row of the persistent, per-owner leaderboard. Ranked client-side by wins desc.
+export const LeaderboardEntrySchema = z.object({
+  name: z.string(),
+  wins: z.number().int().nonnegative(),
+});
+
+export type LeaderboardEntryDto = z.infer<typeof LeaderboardEntrySchema>;
+
+export const LeaderboardSchema = LeaderboardEntrySchema.array();
 
 const USERNAME_MIN_LENGTH: number = 3;
 const USERNAME_MAX_LENGTH: number = 30;

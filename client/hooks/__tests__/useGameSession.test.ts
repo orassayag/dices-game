@@ -41,6 +41,7 @@ function renderSession() {
 describe('useGameSession', () => {
   beforeEach(() => {
     vi.mocked(gamesApi.listInProgressGames).mockResolvedValue([]);
+    vi.mocked(gamesApi.getLeaderboard).mockResolvedValue([]);
     vi.mocked(sound.playWinSound).mockImplementation(() => {});
   });
 
@@ -85,7 +86,9 @@ describe('useGameSession', () => {
         await result.current.handleCreate();
       });
 
-      expect(gamesApi.createGame).toHaveBeenCalledWith({ targetScore: 100, mode: 'human' });
+      expect(gamesApi.createGame).toHaveBeenCalledWith(
+        expect.objectContaining({ targetScore: 100, mode: 'human' }),
+      );
       expect(result.current.showNewGameModal).toBe(false);
       expect(result.current.game?.id).toBe('created');
     });
@@ -105,12 +108,24 @@ describe('useGameSession', () => {
         await result.current.handleCreate();
       });
 
-      expect(gamesApi.createGame).toHaveBeenCalledWith({
-        targetScore: 100,
-        mode: 'ai',
-        aiSeat: 1,
+      expect(gamesApi.createGame).toHaveBeenCalledWith(
+        expect.objectContaining({ targetScore: 100, mode: 'ai', aiSeat: 1 }),
+      );
+      expect(result.current.game?.mode).toBe('ai');
+    });
+
+    it('should send both seat display names when creating a game', async () => {
+      vi.mocked(gamesApi.createGame).mockResolvedValue(makeGame({ id: 'named' }));
+      const { result } = renderSession();
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      await act(async () => {
+        await result.current.handleCreate();
       });
-      expect(result.current.aiHasPlayed).toBe(true);
+
+      const input = vi.mocked(gamesApi.createGame).mock.calls[0]?.[0];
+      expect(input?.p1Name).toBe(result.current.identities.seat1.name);
+      expect(input?.p2Name).toBe(result.current.identities.seat2.name);
     });
   });
 
@@ -197,13 +212,14 @@ describe('useGameSession', () => {
     });
   });
 
-  describe('win counting', () => {
-    it('should increment the seat win count and play the win sound', async () => {
+  describe('leaderboard on a finished game', () => {
+    it('should refetch the server leaderboard and play the win sound exactly once', async () => {
       vi.mocked(gamesApi.listInProgressGames).mockResolvedValue([makeGame()]);
       const { result } = renderSession();
       await waitFor(() => expect(result.current.loading).toBe(false));
       act(() => result.current.closeNewGameModal());
 
+      vi.mocked(gamesApi.getLeaderboard).mockResolvedValue([{ name: 'Player One', wins: 1 }]);
       vi.mocked(gamesApi.holdGame).mockResolvedValue({
         state: makeGame({ status: 'finished', winnerSeat: 1, version: 2 }),
         versionConflictRecovered: false,
@@ -212,27 +228,8 @@ describe('useGameSession', () => {
         await result.current.handleHold();
       });
 
-      expect(result.current.wins.seat1).toBe(1);
+      await waitFor(() => expect(result.current.leaderboard).toEqual([{ name: 'Player One', wins: 1 }]));
       expect(sound.playWinSound).toHaveBeenCalledTimes(1);
-    });
-
-    it('should credit the AI when it wins', async () => {
-      vi.mocked(gamesApi.listInProgressGames).mockResolvedValue([
-        makeGame({ mode: 'ai', aiSeat: 2 }),
-      ]);
-      const { result } = renderSession();
-      await waitFor(() => expect(result.current.loading).toBe(false));
-      act(() => result.current.closeNewGameModal());
-
-      vi.mocked(gamesApi.holdGame).mockResolvedValue({
-        state: makeGame({ mode: 'ai', aiSeat: 2, status: 'finished', winnerSeat: 2, version: 2 }),
-        versionConflictRecovered: false,
-      });
-      await act(async () => {
-        await result.current.handleHold();
-      });
-
-      expect(result.current.wins.ai).toBe(1);
     });
   });
 

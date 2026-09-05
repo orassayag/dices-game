@@ -1,4 +1,5 @@
 import { GameBoard } from '../../components/game-board/GameBoard';
+import { Leaderboard } from '../../components/leaderboard/Leaderboard';
 import { NewGameModal } from '../../components/new-game-modal/NewGameModal';
 import { PLACEHOLDER_GAME, useGameSession } from '../../hooks/useGameSession';
 
@@ -26,8 +27,7 @@ export function GamePage({ user, onSessionExpired, onLogout }: GamePageProps) {
     errorMessage,
     infoMessage,
     aiThinking,
-    wins,
-    aiHasPlayed,
+    leaderboard,
     identities,
     setTargetScoreInput,
     setModeInput,
@@ -47,6 +47,12 @@ export function GamePage({ user, onSessionExpired, onLogout }: GamePageProps) {
       </main>
     );
   }
+
+  const leaderboardEntries = leaderboard.map((entry) => ({
+    id: entry.name,
+    name: entry.name,
+    wins: entry.wins,
+  }));
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background p-4 text-foreground sm:p-6">
@@ -82,18 +88,23 @@ export function GamePage({ user, onSessionExpired, onLogout }: GamePageProps) {
           New Game from the in-game button (midGameReopen), the real board stays visible
           and unchanged behind the modal instead: opening/cancelling New Game must never
           look like a reset — only submitting it ("Let's Go!") actually changes state. */}
-      <GameBoard
-        key={game?.id ?? 'placeholder'}
-        game={showNewGameModal && !midGameReopen ? PLACEHOLDER_GAME : (game ?? PLACEHOLDER_GAME)}
-        identities={identities}
-        wins={wins}
-        aiHasPlayed={aiHasPlayed}
-        onRoll={() => void handleRoll()}
-        onHold={() => void handleHold()}
-        onNewGame={openNewGameModal}
-        busy={busy}
-        aiThinking={aiThinking}
-      />
+      <div className="flex w-full flex-col items-center justify-center gap-4 lg:flex-row lg:items-start">
+        {leaderboardEntries.length > 0 && (
+          <aside className="w-full max-w-56 lg:sticky lg:top-6 lg:w-auto">
+            <Leaderboard entries={leaderboardEntries} />
+          </aside>
+        )}
+        <GameBoard
+          key={game?.id ?? 'placeholder'}
+          game={showNewGameModal && !midGameReopen ? PLACEHOLDER_GAME : (game ?? PLACEHOLDER_GAME)}
+          identities={identities}
+          onRoll={() => void handleRoll()}
+          onHold={() => void handleHold()}
+          onNewGame={openNewGameModal}
+          busy={busy}
+          aiThinking={aiThinking}
+        />
+      </div>
 
       {showNewGameModal && (
         <NewGameModal

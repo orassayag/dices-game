@@ -15,5 +15,7 @@ export function getTestPrisma(): PrismaClient {
 // any serial sequences; CASCADE follows FKs so table order doesn't matter).
 export async function truncateAll(): Promise<void> {
   const prisma = getTestPrisma();
-  await prisma.$executeRawUnsafe('TRUNCATE TABLE "Move", "Game", "User" RESTART IDENTITY CASCADE;');
+  await prisma.$executeRawUnsafe(
+    'TRUNCATE TABLE "Move", "Game", "LeaderboardPlayer", "User" RESTART IDENTITY CASCADE;',
+  );
 }

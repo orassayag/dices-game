@@ -1,4 +1,10 @@
-import { GameStateSchema, type CreateGameInput, type GameStateDto } from '../../shared/index';
+import {
+  GameStateSchema,
+  LeaderboardSchema,
+  type CreateGameInput,
+  type GameStateDto,
+  type LeaderboardEntryDto,
+} from '../../shared/index';
 import { ApiError, apiRequest } from './apiClient';
 
 const LIST_IN_PROGRESS_GAMES_LIMIT: number = 1;
@@ -6,6 +12,11 @@ const LIST_IN_PROGRESS_GAMES_LIMIT: number = 1;
 export async function listInProgressGames(): Promise<GameStateDto[]> {
   const body = await apiRequest(`/games?status=in_progress&limit=${LIST_IN_PROGRESS_GAMES_LIMIT}`);
   return GameStateSchema.array().parse(body);
+}
+
+export async function getLeaderboard(): Promise<LeaderboardEntryDto[]> {
+  const body = await apiRequest('/games/leaderboard');
+  return LeaderboardSchema.parse(body);
 }
 
 export async function createGame(input: CreateGameInput): Promise<GameStateDto> {

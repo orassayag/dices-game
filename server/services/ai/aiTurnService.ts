@@ -5,7 +5,7 @@ import { hold, roll, toSeat, type DiceRoller, type Seat } from '../../domain/gam
 import { assertAiTurnGuard } from '../../domain/gameGuards.js';
 import { createLogger, type Logger } from '../../lib/logger.js';
 import { mapGameToDto } from '../../lib/gameMapper.js';
-import { assertVersionMatched, defaultDiceRoller, getGame } from '../gameService.js';
+import { assertVersionMatched, creditWin, defaultDiceRoller, getGame } from '../gameService.js';
 import type { AiDecision, AiDecisionProvider } from './aiTypes.js';
 import { resolveAiDecision } from './resolveAiDecision.js';
 import { aiProviderSemaphore, claimAiTurn, releaseAiTurnClaim } from './aiTurnConcurrency.js';
@@ -70,8 +70,8 @@ async function aiRollMove(
   });
 }
 
-// No win-credit branch here: this path is only ever reached for the AI seat, and the
-// win counter is human-only by design.
+// This path is only ever reached for the AI seat, so a win here credits the AI's own
+// leaderboard row (the seat's stored name is AI_PLAYER_NAME).
 async function aiHoldMove(gameId: string, expectedVersion: number): Promise<GameStateDto> {
   return await prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Game" WHERE id = ${gameId} FOR UPDATE`;
@@ -97,6 +97,11 @@ async function aiHoldMove(gameId: string, expectedVersion: number): Promise<Game
       },
     });
     await assertVersionMatched(tx, gameId, updated.count);
+
+    if (outcome.won) {
+      const winnerName: string = actorSeat === 1 ? game.p1Name : game.p2Name;
+      await creditWin(tx, game.ownerUserId, winnerName);
+    }
 
     await tx.move.create({
       data: {

@@ -47,3 +47,45 @@ describe('GET /games', () => {
     expect(response.body.error.code).toBe('INVALID_INPUT');
   });
 });
+
+describe('GET /games/leaderboard', () => {
+  beforeEach(async () => {
+    await truncateAll();
+  });
+
+  it('should return the registered seat names, not match "leaderboard" as a game id', async () => {
+    const app = createApp();
+    const session = await registerTestUser(app, 'xena');
+    await authedPost(app, '/games', session).send({
+      targetScore: 100,
+      mode: 'human',
+      p1Name: 'Ryan Mitchell',
+      p2Name: 'James Carter',
+    });
+
+    const response = await authedGet(app, '/games/leaderboard', session);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual([
+      { name: 'James Carter', wins: 0 },
+      { name: 'Ryan Mitchell', wins: 0 },
+    ]);
+  });
+
+  it('should scope the leaderboard to the requesting owner', async () => {
+    const app = createApp();
+    const owner = await registerTestUser(app, 'yolanda');
+    await authedPost(app, '/games', owner).send({
+      targetScore: 100,
+      mode: 'human',
+      p1Name: 'Ryan Mitchell',
+      p2Name: 'James Carter',
+    });
+    const other = await registerTestUser(app, 'zack');
+
+    const response = await authedGet(app, '/games/leaderboard', other);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual([]);
+  });
+});

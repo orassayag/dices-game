@@ -29,14 +29,28 @@ enum MoveKind {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  username     String
-  usernameKey  String   @unique
-  passwordHash String
-  tokenVersion Int      @default(0)
-  wins         Int      @default(0)
-  createdAt    DateTime @default(now())
-  games        Game[]
+  id                 String              @id @default(cuid())
+  username           String
+  usernameKey        String              @unique
+  passwordHash       String
+  tokenVersion       Int                 @default(0)
+  createdAt          DateTime            @default(now())
+  games              Game[]
+  leaderboardPlayers LeaderboardPlayer[]
+}
+
+// One row per distinct player name within an owner's account (the AI is the fixed
+// AI_PLAYER_NAME row). Wins accumulate across games by name, so the leaderboard survives
+// a page refresh and grows as new names play. Scoped per owner via the composite unique key.
+model LeaderboardPlayer {
+  id          String   @id @default(cuid())
+  ownerUserId String
+  owner       User     @relation(fields: [ownerUserId], references: [id])
+  name        String
+  wins        Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@unique([ownerUserId, name])
 }
 
 model Game {
@@ -44,6 +58,8 @@ model Game {
   ownerUserId String
   owner       User       @relation(fields: [ownerUserId], references: [id])
   mode        GameMode   @default(human)
+  p1Name      String // display name credited on a seat-1 win; the AI name when the AI holds seat 1
+  p2Name      String // display name credited on a seat-2 win; the AI name when the AI holds seat 2
   aiSeat      Int? // 1 | 2 when mode = ai; DB CHECK ties this to `mode`
   aiMoveCount Int        @default(0) // successful moves only; DB CHECK caps this at 50
   targetScore Int

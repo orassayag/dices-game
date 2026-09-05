@@ -68,6 +68,22 @@ describe('NewGameModal', () => {
     expect(props.onCancel).toHaveBeenCalled();
   });
 
+  it('should block submit and show a field error when the goal score is 0', () => {
+    const { props } = renderModal({ targetScore: 0 });
+    fireEvent.submit(screen.getByRole('dialog'));
+    expect(props.onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent(/Goal score must be between/i);
+  });
+
+  it('should clear the field error once the goal score changes', () => {
+    renderModal({ targetScore: 0 });
+    fireEvent.submit(screen.getByRole('dialog'));
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/Goal score/i), { target: { value: '100' } });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('should change mode and ai-seat through the selects', () => {
     const { props } = renderModal({ mode: 'ai' });
     fireEvent.change(screen.getByLabelText(/Opponent/i), { target: { value: 'ai' } });

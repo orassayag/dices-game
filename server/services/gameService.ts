@@ -1,7 +1,8 @@
 import { Prisma, type Move } from '@prisma/client';
 import prisma from '../db.js';
 import { env } from '../config/env.js';
-import type { CreateGameInput, GameStateDto } from '../../shared/index.js';
+import { AI_PLAYER_NAME } from '../../shared/index.js';
+import type { CreateGameInput, GameStateDto, LeaderboardEntryDto } from '../../shared/index.js';
 import { createDiceRoller, hold, roll, toSeat, type DiceRoller } from '../domain/gameEngine.js';
 import { assertActionGuard, assertReadGuard } from '../domain/gameGuards.js';
 import { ConflictError } from '../lib/errors.js';
@@ -13,6 +14,9 @@ export const defaultDiceRoller: DiceRoller = createDiceRoller(env.diceSeed);
 
 const UNIQUE_CONSTRAINT_VIOLATION_CODE: string = 'P2002';
 
+const DEFAULT_SEAT_1_NAME: string = 'Player 1';
+const DEFAULT_SEAT_2_NAME: string = 'Player 2';
+
 export function isUniqueConstraintViolation(error: unknown): boolean {
   return (
     error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -20,24 +24,109 @@ export function isUniqueConstraintViolation(error: unknown): boolean {
   );
 }
 
+interface SeatNames {
+  p1Name: string;
+  p2Name: string;
+}
+
+// The AI seat's stored name is always forced to AI_PLAYER_NAME so every AI game credits
+// the one shared AI row, regardless of what the client sent for that seat.
+function resolveSeatNames(input: CreateGameInput): SeatNames {
+  const names: SeatNames = {
+    p1Name: input.p1Name ?? DEFAULT_SEAT_1_NAME,
+    p2Name: input.p2Name ?? DEFAULT_SEAT_2_NAME,
+  };
+  if (input.mode === 'ai') {
+    if (input.aiSeat === 1) {
+      names.p1Name = AI_PLAYER_NAME;
+    } else {
+      names.p2Name = AI_PLAYER_NAME;
+    }
+  }
+  return names;
+}
+
+// Ensures a leaderboard row exists (at zero wins) for every seat name the moment a game
+// starts, so a player who has only played — not yet won — still appears. Never resets an
+// existing row's win count. Deduped so a game with two identical names upserts once.
+async function registerLeaderboardPlayers(
+  tx: Prisma.TransactionClient,
+  ownerUserId: string,
+  names: SeatNames,
+): Promise<void> {
+  const distinctNames: string[] = [...new Set([names.p1Name, names.p2Name])];
+  for (const name of distinctNames) {
+    await tx.leaderboardPlayer.upsert({
+      where: { ownerUserId_name: { ownerUserId, name } },
+      create: { ownerUserId, name },
+      update: {},
+    });
+  }
+}
+
+// Upsert rather than a bare update so a win is still credited even if the row was somehow
+// never registered — the leaderboard can never miss a win.
+export async function creditWin(
+  tx: Prisma.TransactionClient,
+  ownerUserId: string,
+  winnerName: string,
+): Promise<void> {
+  await tx.leaderboardPlayer.upsert({
+    where: { ownerUserId_name: { ownerUserId, name: winnerName } },
+    create: { ownerUserId, name: winnerName, wins: 1 },
+    update: { wins: { increment: 1 } },
+  });
+}
+
+export async function getLeaderboard(ownerUserId: string): Promise<LeaderboardEntryDto[]> {
+  const players = await prisma.leaderboardPlayer.findMany({
+    where: { ownerUserId },
+    orderBy: [{ wins: 'desc' }, { name: 'asc' }],
+  });
+  return players.map((player) => ({ name: player.name, wins: player.wins }));
+}
+
+const DEFAULT_STARTING_SEAT: number = 1;
+
+// The player who won the most recent finished game takes the first turn of the next one;
+// with no prior winner (first game ever) the default seat leads.
+async function resolvePreviousWinnerSeat(
+  tx: Prisma.TransactionClient,
+  ownerUserId: string,
+): Promise<number> {
+  const lastFinished = await tx.game.findFirst({
+    where: { ownerUserId, status: 'finished', winnerSeat: { not: null } },
+    orderBy: { createdAt: 'desc' },
+    select: { winnerSeat: true },
+  });
+  return lastFinished?.winnerSeat ?? DEFAULT_STARTING_SEAT;
+}
+
 export async function createGame(
   ownerUserId: string,
   input: CreateGameInput,
 ): Promise<GameStateDto> {
+  const seatNames = resolveSeatNames(input);
   try {
     const game = await prisma.$transaction(async (tx) => {
       await tx.game.updateMany({
         where: { ownerUserId, status: 'in_progress' },
         data: { status: 'abandoned', version: { increment: 1 } },
       });
-      return await tx.game.create({
+      const startingSeat = await resolvePreviousWinnerSeat(tx, ownerUserId);
+      const created = await tx.game.create({
         data: {
           ownerUserId,
           mode: input.mode,
           aiSeat: input.aiSeat ?? null,
           targetScore: input.targetScore,
+          currentSeat: startingSeat,
+          p1Name: seatNames.p1Name,
+          p2Name: seatNames.p2Name,
         },
       });
+      await registerLeaderboardPlayers(tx, ownerUserId, seatNames);
+      return created;
     });
     return mapGameToDto(game, null);
   } catch (error) {
@@ -171,13 +260,9 @@ export async function holdGame(
     });
     await assertVersionMatched(tx, gameId, updated.count);
 
-    // Redundant with assertActionGuard (already rejects the AI seat) but kept explicit so
-    // a win never credits the AI if that guarantee ever changes.
-    if (outcome.won && (game.mode === 'human' || actorSeat !== game.aiSeat)) {
-      await tx.user.update({
-        where: { id: game.ownerUserId },
-        data: { wins: { increment: 1 } },
-      });
+    if (outcome.won) {
+      const winnerName: string = actorSeat === 1 ? game.p1Name : game.p2Name;
+      await creditWin(tx, game.ownerUserId, winnerName);
     }
 
     // lastDice deliberately left unchanged so the last roll stays visible after holding.

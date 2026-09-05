@@ -35,20 +35,16 @@ export function PlayerCard({
         )}
       </div>
       <p
-        className={`text-sm font-semibold ${isCurrentTurn ? 'text-accent' : 'text-muted-foreground'}`}
+        className={`text-base font-semibold sm:text-lg ${isCurrentTurn ? 'text-accent' : 'text-muted-foreground'}`}
       >
         Player {seatNumber}
       </p>
       <div className="flex h-8 items-center justify-center">
         {isWinner && (
-          <Crown
-            size={32}
-            aria-hidden="true"
-            className="winner-fade-in text-warning drop-shadow"
-          />
+          <Crown size={32} aria-hidden="true" className="winner-fade-in text-warning drop-shadow" />
         )}
       </div>
-      <div className="relative size-20 sm:size-24">
+      <div className="relative size-28 sm:size-36">
         <img
           src={avatarSrc}
           alt={`Player ${seatNumber}'s avatar`}
@@ -78,16 +74,14 @@ export function PlayerCard({
         )}
       </div>
       <p
-        className={`mt-8 text-sm ${isCurrentTurn ? 'font-semibold text-accent' : 'text-foreground'}`}
+        className={`mt-8 text-base sm:text-lg ${isCurrentTurn ? 'font-semibold text-accent' : 'text-foreground'}`}
       >
         {name}
       </p>
-      <p className={`text-3xl font-bold sm:text-4xl ${isCurrentTurn ? 'text-accent' : ''}`}>
+      <p className={`text-4xl font-bold sm:text-5xl ${isCurrentTurn ? 'text-accent' : ''}`}>
         {score}
       </p>
-      {isWinner && (
-        <p className="winner-fade-in text-sm font-semibold text-success">Winner!</p>
-      )}
+      {isWinner && <p className="winner-fade-in text-sm font-semibold text-success">Winner!</p>}
     </div>
   );
 }

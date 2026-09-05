@@ -6,11 +6,13 @@ import { AppError, ForbiddenError } from '../../lib/errors.js';
 import {
   createGame,
   getGame,
+  getLeaderboard,
   holdGame,
   isUniqueConstraintViolation,
   listInProgressGames,
   rollGame,
 } from '../gameService.js';
+import { AI_PLAYER_NAME } from '../../../shared/index.js';
 
 const TARGET_SCORE: number = 100;
 
@@ -23,6 +25,13 @@ async function createTestUser(usernameKey: string): Promise<string> {
     data: { username: usernameKey, usernameKey, passwordHash: 'not-a-real-hash' },
   });
   return user.id;
+}
+
+async function winsFor(ownerUserId: string, name: string): Promise<number> {
+  const player = await getTestPrisma().leaderboardPlayer.findUnique({
+    where: { ownerUserId_name: { ownerUserId, name } },
+  });
+  return player?.wins ?? 0;
 }
 
 describe('gameService', () => {
@@ -44,6 +53,31 @@ describe('gameService', () => {
       expect(game.roundScore).toBe(0);
       expect(game.winnerSeat).toBeNull();
       expect(game.version).toBe(0);
+    });
+
+    it('should give the first turn to the seat that won the previous finished game', async () => {
+      const ownerId = await createTestUser('winner-starts');
+      const first = await createGame(ownerId, { targetScore: 10, mode: 'human' });
+      const rolled = await rollGame(first.id, ownerId, first.version, fixedRoller(6, 5));
+      const finished = await holdGame(first.id, ownerId, rolled.version);
+      expect(finished.winnerSeat).toBe(1);
+
+      const next = await createGame(ownerId, { targetScore: TARGET_SCORE, mode: 'human' });
+
+      expect(next.currentSeat).toBe(1);
+    });
+
+    it('should give the first turn to seat 2 when seat 2 won the previous game', async () => {
+      const ownerId = await createTestUser('seat2-starts');
+      const first = await createGame(ownerId, { targetScore: 10, mode: 'human' });
+      await rollGame(first.id, ownerId, first.version, fixedRoller(6, 6));
+      const seat2Rolled = await rollGame(first.id, ownerId, first.version + 1, fixedRoller(6, 5));
+      const finished = await holdGame(first.id, ownerId, seat2Rolled.version);
+      expect(finished.winnerSeat).toBe(2);
+
+      const next = await createGame(ownerId, { targetScore: TARGET_SCORE, mode: 'human' });
+
+      expect(next.currentSeat).toBe(2);
     });
   });
 
@@ -147,16 +181,19 @@ describe('gameService', () => {
       expect(held.p1Score).toBe(11);
     });
 
-    it('should increment the owner wins by exactly one on a winning hold, and never re-increment a stale retry', async () => {
+    it('should credit the winning seat name exactly one win and never re-credit a stale retry', async () => {
       const ownerId = await createTestUser('paul');
-      const created = await createGame(ownerId, { targetScore: 10, mode: 'human' });
+      const created = await createGame(ownerId, {
+        targetScore: 10,
+        mode: 'human',
+        p1Name: 'Ryan Mitchell',
+        p2Name: 'James Carter',
+      });
       const rolled = await rollGame(created.id, ownerId, created.version, fixedRoller(6, 5));
 
       const held = await holdGame(created.id, ownerId, rolled.version);
       expect(held.status).toBe('finished');
-      const winsAfterFirstHold = (
-        await getTestPrisma().user.findUniqueOrThrow({ where: { id: ownerId } })
-      ).wins;
+      const winsAfterFirstHold = await winsFor(ownerId, 'Ryan Mitchell');
       expect(winsAfterFirstHold).toBe(1);
 
       try {
@@ -165,21 +202,60 @@ describe('gameService', () => {
       } catch (error) {
         expect((error as AppError).errorCode).toBe('VERSION_CONFLICT');
       }
-      const winsAfterStaleRetry = (
-        await getTestPrisma().user.findUniqueOrThrow({ where: { id: ownerId } })
-      ).wins;
+      const winsAfterStaleRetry = await winsFor(ownerId, 'Ryan Mitchell');
       expect(winsAfterStaleRetry).toBe(1);
     });
 
-    it('should not increment wins on a non-winning hold', async () => {
+    it('should not credit any win on a non-winning hold', async () => {
       const ownerId = await createTestUser('quinn');
-      const created = await createGame(ownerId, { targetScore: TARGET_SCORE, mode: 'human' });
+      const created = await createGame(ownerId, {
+        targetScore: TARGET_SCORE,
+        mode: 'human',
+        p1Name: 'Ryan Mitchell',
+        p2Name: 'James Carter',
+      });
       const rolled = await rollGame(created.id, ownerId, created.version, fixedRoller(3, 4));
 
       await holdGame(created.id, ownerId, rolled.version);
 
-      const wins = (await getTestPrisma().user.findUniqueOrThrow({ where: { id: ownerId } })).wins;
-      expect(wins).toBe(0);
+      expect(await winsFor(ownerId, 'Ryan Mitchell')).toBe(0);
+    });
+  });
+
+  describe('leaderboard', () => {
+    it('should register both seat names at zero wins when a game is created', async () => {
+      const ownerId = await createTestUser('rita');
+      await createGame(ownerId, {
+        targetScore: TARGET_SCORE,
+        mode: 'human',
+        p1Name: 'Ryan Mitchell',
+        p2Name: 'James Carter',
+      });
+
+      const board = await getLeaderboard(ownerId);
+      expect(board).toEqual([
+        { name: 'James Carter', wins: 0 },
+        { name: 'Ryan Mitchell', wins: 0 },
+      ]);
+    });
+
+    it('should store the AI name for the AI seat and rank winners first', async () => {
+      const ownerId = await createTestUser('sam');
+      const created = await createGame(ownerId, {
+        targetScore: 10,
+        mode: 'ai',
+        aiSeat: 2,
+        p1Name: 'Ryan Mitchell',
+        p2Name: 'ignored-client-name',
+      });
+      const rolled = await rollGame(created.id, ownerId, created.version, fixedRoller(6, 5));
+      await holdGame(created.id, ownerId, rolled.version);
+
+      const board = await getLeaderboard(ownerId);
+      expect(board).toEqual([
+        { name: 'Ryan Mitchell', wins: 1 },
+        { name: AI_PLAYER_NAME, wins: 0 },
+      ]);
     });
   });
 
