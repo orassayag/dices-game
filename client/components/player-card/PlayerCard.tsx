@@ -25,7 +25,7 @@ export function PlayerCard({
   const [avatarLoaded, setAvatarLoaded] = useState<boolean>(false);
 
   return (
-    <div className="flex flex-col items-center gap-1 text-center">
+    <div className="flex w-full min-w-0 flex-col items-center gap-1 text-center">
       <div className="flex h-4 items-center justify-center">
         {isThinking && (
           <>
@@ -74,7 +74,7 @@ export function PlayerCard({
         )}
       </div>
       <p
-        className={`mt-8 text-base sm:text-lg ${isCurrentTurn ? 'font-semibold text-accent' : 'text-foreground'}`}
+        className={`mt-4 max-w-full break-words text-base sm:mt-8 sm:text-lg ${isCurrentTurn ? 'font-semibold text-accent' : 'text-foreground'}`}
       >
         {name}
       </p>

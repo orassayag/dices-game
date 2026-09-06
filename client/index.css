@@ -4,13 +4,21 @@
   /* Screen-relative game panel size — defined once here so GameBoard/GameScreen
      reference the token instead of a literal. Tall enough that the winner banner + both
      "Winner!" lines never push content past the panel's overflow-hidden edge — the panel
-     must never show a scrollbar (GameBoard.tsx clips instead of scrolling). */
-  --game-panel-width: 66vw;
+     must never show a scrollbar (GameBoard.tsx clips instead of scrolling).
+     On phones/tablets the panel fills its (already page-padded) container; only on large
+     screens does it shrink to 66vw so it doesn't stretch edge-to-edge on a wide monitor. */
+  --game-panel-width: 100%;
   --game-panel-height: 92vh;
   /* The login/register card is intentionally narrower than the game panel — a fixed cap
      (not viewport-relative like the game panel) reads as a compact auth card on every
      screen size instead of stretching wide on large monitors. */
-  --login-panel-width: min(90vw, 28rem);
+  --login-panel-width: min(92vw, 28rem);
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --game-panel-width: 66vw;
+  }
 }
 
 /* Design tokens (Tailwind v4 CSS-first theme). Every color used anywhere in the app must

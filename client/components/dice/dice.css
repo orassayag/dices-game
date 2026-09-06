@@ -4,7 +4,7 @@
    measurement below derives from, so the cube can be resized in one place. */
 
 :root {
-  --dice-size: clamp(5.5rem, 9vw, 9rem);
+  --dice-size: clamp(4rem, 9vw, 9rem);
   /* A real die is white with black pips regardless of app theme — every face uses the
      same flat white so no face ever reads as gray, on any screen. */
   --dice-face-color: #ffffff;

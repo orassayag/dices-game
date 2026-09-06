@@ -63,11 +63,12 @@ export function NewGameModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <form
+        noValidate
         role="dialog"
         aria-modal="true"
         aria-labelledby="new-game-modal-heading"
         onSubmit={handleSubmit}
-        className="relative flex w-(--login-panel-width) min-w-[20rem] flex-col justify-center gap-4 rounded-2xl border border-border bg-surface p-8"
+        className="relative flex w-(--login-panel-width) max-w-full flex-col justify-center gap-4 rounded-2xl border border-border bg-surface p-6 sm:p-8"
       >
         {onCancel && (
           <button
@@ -84,26 +85,28 @@ export function NewGameModal({
         </h1>
         <label className="flex flex-col gap-1 text-sm">
           Goal score
-          <input
-            key={shakeKey}
-            type="number"
-            value={targetScore}
-            onChange={(event) => handleTargetScoreChange(event.target.value)}
-            onKeyDown={blockNonPositiveKeys}
-            min={TARGET_SCORE_MIN}
-            max={TARGET_SCORE_MAX}
-            spellCheck={false}
-            required
-            aria-invalid={Boolean(targetScoreError)}
-            className={`rounded-lg border px-3 py-2 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
-              targetScoreError ? 'field-shake border-danger' : 'border-border bg-surface-alt'
-            }`}
-          />
-          {targetScoreError && (
-            <span role="alert" className="text-xs font-medium text-danger">
-              {targetScoreError}
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            <input
+              key={shakeKey}
+              type="number"
+              value={targetScore}
+              onChange={(event) => handleTargetScoreChange(event.target.value)}
+              onKeyDown={blockNonPositiveKeys}
+              min={TARGET_SCORE_MIN}
+              max={TARGET_SCORE_MAX}
+              spellCheck={false}
+              required
+              aria-invalid={Boolean(targetScoreError)}
+              className={`min-w-0 flex-1 rounded-lg border px-3 py-2 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
+                targetScoreError ? 'field-shake border-danger' : 'border-border bg-surface-alt'
+              }`}
+            />
+            {targetScoreError && (
+              <span role="alert" className="shrink-0 text-xs font-medium text-danger">
+                {targetScoreError}
+              </span>
+            )}
+          </div>
         </label>
         <label className="flex flex-col gap-1 text-sm">
           Opponent

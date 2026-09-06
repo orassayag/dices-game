@@ -55,7 +55,7 @@ export function GamePage({ user, onSessionExpired, onLogout }: GamePageProps) {
   }));
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background p-4 text-foreground sm:p-6">
+    <main className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background p-4 pt-16 text-foreground sm:p-6">
       <div className="fixed top-4 left-4 z-40">
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <button

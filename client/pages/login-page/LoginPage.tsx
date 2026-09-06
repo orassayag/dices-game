@@ -39,7 +39,7 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
   } = useAuthForm({ onAuthenticated });
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 bg-background p-4 text-foreground">
+    <main className="flex min-h-screen flex-col items-center justify-center gap-6 bg-background p-4 pt-16 text-foreground sm:p-6">
       <div className="flex flex-col items-center gap-3">
         <div className="flex items-center gap-3">
           <a href="https://roeto.co.il/" target="_blank" rel="noopener noreferrer" aria-label="Visit Roeto's website">
@@ -59,7 +59,7 @@ export function LoginPage({ onAuthenticated }: LoginPageProps) {
         onSubmit={(event) => {
           void handleSubmit(event);
         }}
-        className="flex w-(--login-panel-width) min-w-[20rem] flex-col justify-center gap-4 rounded-2xl border border-border bg-surface p-8"
+        className="flex w-(--login-panel-width) max-w-full flex-col justify-center gap-4 rounded-2xl border border-border bg-surface p-6 sm:p-8"
       >
         <h2 className="text-xl font-semibold">{MODE_TITLE[mode]}</h2>
 

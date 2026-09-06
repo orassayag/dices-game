@@ -16,7 +16,7 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {
   medium: 'px-5 py-2.5 text-base',
-  large: 'px-10 py-4 text-xl',
+  large: 'px-5 py-3 text-lg sm:px-10 sm:py-4 sm:text-xl',
 };
 
 export function Button({

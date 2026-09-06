@@ -72,14 +72,14 @@ export function useAuthForm({ onAuthenticated }: UseAuthFormOptions): UseAuthFor
     if (username.trim().length === 0) {
       errors.username = 'Username is required.';
     } else if (username.length < USERNAME_MIN_LENGTH) {
-      errors.username = `Username must be at least ${USERNAME_MIN_LENGTH} characters.`;
+      errors.username = `Must be at least ${USERNAME_MIN_LENGTH} characters.`;
     }
     if (password.length === 0) {
       errors.password = 'Password is required.';
     } else if (mode === 'register' && password.length < PASSWORD_MIN_LENGTH) {
-      errors.password = `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`;
+      errors.password = `Must be at least ${PASSWORD_MIN_LENGTH} characters.`;
     } else if (mode === 'register' && !PASSWORD_STYLE_REGEX.test(password)) {
-      errors.password = 'Password must contain at least one letter and one number.';
+      errors.password = 'Needs a letter and a number.';
     }
     setFieldErrors(errors);
     if (errors.username) {

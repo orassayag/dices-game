@@ -69,8 +69,8 @@ export function GameBoard({
   );
 
   return (
-    <div className="relative flex w-(--game-panel-width) min-w-[20rem] flex-col items-center">
-      <div className="absolute right-0 -top-2 z-10 -translate-y-full">
+    <div className="relative flex w-(--game-panel-width) max-w-full flex-col items-center">
+      <div className="mb-2 self-end sm:absolute sm:right-0 sm:-top-2 sm:z-10 sm:mb-0 sm:-translate-y-full">
         <Button
           variant="secondary"
           onClick={onNewGame}
@@ -109,7 +109,7 @@ export function GameBoard({
 
         <Confetti active={hasWinner} />
 
-        <div className="mx-auto flex flex-col items-center justify-center gap-1 rounded-2xl bg-accent px-10 py-6 text-accent-foreground shadow-sm sm:px-14 sm:py-8">
+        <div className="mx-auto flex flex-col items-center justify-center gap-1 rounded-2xl bg-accent px-8 py-5 text-accent-foreground shadow-sm sm:px-14 sm:py-8">
           <span className="text-sm font-semibold uppercase tracking-wide opacity-80">
             Goal score
           </span>
@@ -125,7 +125,7 @@ export function GameBoard({
           </p>
         )}
 
-        <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-2 sm:gap-4">
+        <div className="grid grid-cols-2 items-start gap-2 sm:grid-cols-[1fr_auto_1fr] sm:gap-4">
           <PlayerCard
             seatNumber={1}
             name={seat1Display.name}
@@ -137,7 +137,7 @@ export function GameBoard({
           />
 
           <div
-            className={`mt-16 flex items-center justify-center gap-3 self-start rounded-xl bg-surface-alt px-5 py-5 sm:mt-20 sm:gap-6 sm:px-8 sm:py-7 ${
+            className={`order-last col-span-2 mt-2 flex items-center justify-center gap-2 justify-self-center rounded-xl bg-surface-alt px-4 py-4 sm:order-none sm:col-span-1 sm:mt-20 sm:gap-6 sm:self-start sm:px-8 sm:py-7 ${
               frozen ? 'outline outline-2 outline-danger' : ''
             }`}
           >
@@ -179,7 +179,7 @@ export function GameBoard({
 
         <AbandonedNotice game={game} />
 
-        <div className="flex justify-center gap-4">
+        <div className="flex flex-wrap justify-center gap-3 sm:gap-4">
           <Button
             size="large"
             onClick={handleRollClick}
