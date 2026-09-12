@@ -20,10 +20,20 @@ const consoleStream = env.isProduction
   ? { stream: process.stdout }
   : { stream: pinoPretty({ colorize: true, translateTime: 'SYS:standard', ignore: 'pid,hostname' }) };
 
-const rootLogger = pino(
-  { timestamp: pino.stdTimeFunctions.isoTime },
-  pino.multistream([consoleStream, { stream: pino.destination({ dest: LOG_FILE_PATH, mkdir: true }) }]),
-);
+// Serverless (Vercel) has a read-only filesystem outside /tmp, so opening a file
+// destination throws EROFS at boot; the platform captures stdout as runtime logs
+// instead. pino.destination opens the file eagerly, so it is only constructed off
+// serverless — never merely excluded from the stream list.
+const isServerless: boolean = Boolean(process.env.VERCEL);
+
+function buildStreams(): Parameters<typeof pino.multistream>[0] {
+  if (isServerless) {
+    return [consoleStream];
+  }
+  return [consoleStream, { stream: pino.destination({ dest: LOG_FILE_PATH, mkdir: true }) }];
+}
+
+const rootLogger = pino({ timestamp: pino.stdTimeFunctions.isoTime }, pino.multistream(buildStreams()));
 
 export function createLogger(scope: string): Logger {
   const scopedLogger = rootLogger.child({ scope });
