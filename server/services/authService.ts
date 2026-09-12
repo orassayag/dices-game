@@ -61,6 +61,16 @@ export async function loginUser(username: string, password: string): Promise<Aut
   };
 }
 
+// Bumps tokenVersion so every token already issued for this user (the one in the cookie
+// being cleared, plus any other live session) fails the requireAuth version check on its
+// next request — clearing the cookie alone leaves a captured token valid until expiry.
+export async function revokeUserSessions(userId: string): Promise<void> {
+  await prisma.user.update({
+    where: { id: userId },
+    data: { tokenVersion: { increment: 1 } },
+  });
+}
+
 // UNAUTHORIZED, not 404 — matches how requireAuth treats a deleted account for a token
 // that's technically still valid.
 export async function getAuthenticatedUser(

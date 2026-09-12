@@ -60,7 +60,7 @@ describe('useAuthForm', () => {
     await act(async () => {
       await result.current.handleSubmit(submitEvent());
     });
-    expect(result.current.fieldErrors.password).toMatch(/one letter and one number/);
+    expect(result.current.fieldErrors.password).toMatch(/a letter and a number/);
   });
 
   it('should log in a valid user', async () => {

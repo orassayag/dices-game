@@ -8,7 +8,12 @@ import { AUTH_TOKEN_LIFETIME_SECONDS, normalizeUsernameKey } from '../lib/authCr
 import { RateLimitedError } from '../lib/errors.js';
 import { requireAuth, requireUserId } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validate.js';
-import { getAuthenticatedUser, loginUser, registerUser } from '../services/authService.js';
+import {
+  getAuthenticatedUser,
+  loginUser,
+  registerUser,
+  revokeUserSessions,
+} from '../services/authService.js';
 
 // `app.set('trust proxy', false)` (server/app.ts) makes `req.ip` the real socket
 // address, so neither limiter below can be bypassed by a forged X-Forwarded-For header.
@@ -112,7 +117,16 @@ authRouter.post(
   },
 );
 
-authRouter.post('/logout', requireAuth, (_req: Request, res: Response): void => {
-  res.clearCookie(env.cookie.authCookieName, authCookieOptions());
-  res.status(204).end();
-});
+authRouter.post(
+  '/logout',
+  requireAuth,
+  async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      await revokeUserSessions(requireUserId(req));
+      res.clearCookie(env.cookie.authCookieName, authCookieOptions());
+      res.status(204).end();
+    } catch (error) {
+      next(error);
+    }
+  },
+);
