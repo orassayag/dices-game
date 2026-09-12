@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "pnpm run build",
+  "outputDirectory": "dist/client",
+  "rewrites": [
+    { "source": "/auth/:path*", "destination": "/api" },
+    { "source": "/games/:path*", "destination": "/api" },
+    { "source": "/health", "destination": "/api" },
+    { "source": "/((?!assets/).*)", "destination": "/index.html" }
+  ]
+}
