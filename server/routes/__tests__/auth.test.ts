@@ -2,10 +2,12 @@
 import request from 'supertest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../../app.js';
+import { env } from '../../config/env.js';
 import { truncateAll } from '../../__tests__/helpers/testDb.js';
 import * as authCrypto from '../../lib/authCrypto.js';
 import {
   authedGet,
+  authedPost,
   extractSetCookieHeaders,
   registerTestUser,
 } from '../../__tests__/helpers/authedSession.js';
@@ -115,6 +117,32 @@ describe('POST /auth/logout', () => {
     const app = createApp();
     const response = await request(app).post('/auth/logout');
     expect(response.status).toBe(401);
+  });
+
+  it('should clear the auth cookie on logout', async () => {
+    const app = createApp();
+    const session = await registerTestUser(app, 'alice');
+
+    const response = await authedPost(app, '/auth/logout', session);
+
+    expect(response.status).toBe(204);
+    const cleared = extractSetCookieHeaders(response).find((cookie) =>
+      cookie.startsWith(`${env.cookie.authCookieName}=`),
+    );
+    expect(cleared).toMatch(/token=;/);
+  });
+
+  it('should invalidate the token so the same cookie is rejected after logout', async () => {
+    const app = createApp();
+    const session = await registerTestUser(app, 'alice');
+
+    const beforeLogout = await authedGet(app, '/auth/me', session);
+    expect(beforeLogout.status).toBe(200);
+
+    await authedPost(app, '/auth/logout', session);
+
+    const afterLogout = await authedGet(app, '/auth/me', session);
+    expect(afterLogout.status).toBe(401);
   });
 });
 

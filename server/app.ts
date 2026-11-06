@@ -16,9 +16,10 @@ const JSON_BODY_LIMIT: string = '16kb';
 
 export function createApp() {
   const app = express();
-  // Directly-exposed single instance, no reverse proxy in front — Express must not trust
-  // any X-Forwarded-For header, or the rate limiters could be bypassed by forging one.
-  app.set('trust proxy', false);
+  // Behind Vercel's single proxy hop, trust exactly one hop so req.ip is the real client
+  // IP the rate limiters key on. A directly-exposed instance trusts nothing, or a forged
+  // X-Forwarded-For could bypass the limiters.
+  app.set('trust proxy', process.env.VERCEL ? 1 : false);
   app.use(
     helmet({
       contentSecurityPolicy: {
